@@ -1,0 +1,61 @@
+<html>
+<!-- creation date: 2001-1-12 -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<title></title>
+</head>
+<body bgcolor=#ffffff text=#0033cc>
+<br>
+<%$bg0$%>
+<p><font color=#0033cc>您的信箱:&nbsp;<b><%$addr$%></b></color></p>
+<p align=left><strong><font color=#0033cc>共<font color=#ff9933>
+<b><i><%$nn$%></i></b>
+</font>个文件夹</font></strong></p>
+<%$ed0$%>
+<div align=center>
+<center>
+
+<table border=0 width=100%>
+<tr bgcolor=#99c8ff>
+<th height=20><font color=#ffffff>文件夹</font></th>
+<th height=20><font color=#ffffff>未读邮件</font></th>
+<th height=20><font color=#ffffff>邮件总数</font></th>
+<th height=20><font color=#ffffff>大小</font></th>
+</tr>
+<%$bg1$%>
+<tr bgcolor=#dddddd>
+<td width=25% height=20 align=left><a href=<%$act$%>><%$name$%></a>&nbsp;</td>
+<td width=30% height=20 align=left><p align=right><%$n1$%>&nbsp;封&nbsp;</td>
+<td width=30% height=20 align=left><p align=right><%$n2$%>&nbsp;封&nbsp;</td>
+<td width=15% height=20 align=left><p align=right><%$n3$%>&nbsp;K&nbsp;</td>
+</tr>
+<%$ed1$%>
+<tr bgcolor=99c8ff>
+<td width=25% height=20 align=left>总计</td>
+<td width=30% height=20 align=left><p align=right><%$n1$%>&nbsp;封&nbsp;</td>
+<td width=30% height=20 align=left><p align=right><%$n2$%>&nbsp;封&nbsp;</td>
+<td width=15% height=20 align=left><p align=right><%$n3$%>&nbsp;K&nbsp;</td>
+</tr>
+</table></center></div>
+<%$bg2$%>
+<form method=POST action=<%$fcg_add$%>>
+<div><p>
+<input type=submit value="增加文件夹" name=add>&nbsp;&nbsp;<input type=text name=afolder value="新文件夹" maxlength=20 size=20></p></div>
+<input type=hidden name=uid value=<%$uid1$%>>
+<input type=hidden name=des value=<%$des1$%>>
+</form>
+<form method=POST action=<%$fcg_del$%>>
+<input type=hidden name=uid value=<%$uid2$%>>
+<input type=hidden name=des value=<%$des2$%>>
+<div><p>
+<input type=submit value="删除文件夹" name=del>&nbsp;&nbsp;<select name=dfolder size=1 value=>
+<%$ed2$%>
+<%$bg3$%>
+<option value=<%$val$%>><%$name$%></option>
+<%$ed3$%>
+</select></p></form>
+
+<br>
+<img src=/images/post.gif>
+</body>
+</html>

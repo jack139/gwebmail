@@ -1,0 +1,2353 @@
+diff -Nacr sendmail-8.10.1/devtools/Site/site.config.m4 sendmail-devel/devtools/Site/site.config.m4
+*** sendmail-8.10.1/devtools/Site/site.config.m4	Thu Jan  1 08:00:00 1970
+--- sendmail-devel/devtools/Site/site.config.m4	Sat Feb  3 17:41:04 2001
+***************
+*** 0 ****
+--- 1,7 ----
++ APPENDDEF(`confENVDEF',		`-DMYSQL_MAP')
++ APPENDDEF(`confINCDIRS',	`-I/usr/include -I/usr/local/mysql/include/mysql')
++ APPENDDEF(`confLIBDIRS',	`-L/usr/local/mysql/lib/mysql/')
++ APPENDDEF(`confLIBS',		`-lmysqlclient')
++ 
++ define(`conf_sendmail_SRCADD', `mysql_sendmail.c')
++ define(`conf_mail_local_SRCADD', `mysql_local.c')
+diff -Nacr sendmail-8.10.1/mail.conf sendmail-devel/mail.conf
+*** sendmail-8.10.1/mail.conf	Thu Jan  1 08:00:00 1970
+--- sendmail-devel/mail.conf	Sat Feb  3 17:41:04 2001
+***************
+*** 0 ****
+--- 1,20 ----
++ ##############################################################################
++ # General (can be overriden in sendmail.cf by per map options)
++ ##############################################################################
++ 
++ MysqlHost               host
++ MysqlUsername           username
++ MysqlPassword           password
++ MysqlDatabase           database_name
++ MysqlUserTable          users_table
++ MysqlAliasTable         alias_table
++ MysqlMapTable           default_map_table
++ 
++ ##############################################################################
++ #  For the MySQL MAP only (for alias you have to define it in
++ # mysql_sendmail.h before you compile)
++ ##############################################################################
++ 
++ MysqlLHSColumn          default_key_column
++ MysqlRHSColumn          default_value_column
++ 
+diff -Nacr sendmail-8.10.1/mail.local/mail.local.c sendmail-devel/mail.local/mail.local.c
+*** sendmail-8.10.1/mail.local/mail.local.c	Fri Mar 17 15:32:44 2000
+--- sendmail-devel/mail.local/mail.local.c	Sat Feb  3 17:41:04 2001
+***************
+*** 1,5 ****
+  /*
+!  * Copyright (c) 1998-2000 Sendmail, Inc. and its suppliers.
+   *	All rights reserved.
+   * Copyright (c) 1990, 1993, 1994
+   *	The Regents of the University of California.  All rights reserved.
+--- 1,5 ----
+  /*
+!  * Copyright (c) 1998, 1999 Sendmail, Inc. and its suppliers.
+   *	All rights reserved.
+   * Copyright (c) 1990, 1993, 1994
+   *	The Regents of the University of California.  All rights reserved.
+***************
+*** 12,25 ****
+  
+  #ifndef lint
+  static char copyright[] =
+! "@(#) Copyright (c) 1998-2000 Sendmail, Inc. and its suppliers.\n\
+  	All rights reserved.\n\
+       Copyright (c) 1990, 1993, 1994\n\
+  	The Regents of the University of California.  All rights reserved.\n";
+  #endif /* ! lint */
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: mail.local.c,v 8.143 2000/03/17 07:32:44 gshapiro Exp $";
+  #endif /* ! lint */
+  
+  /*
+--- 12,25 ----
+  
+  #ifndef lint
+  static char copyright[] =
+! "@(#) Copyright (c) 1998, 1999 Sendmail, Inc. and its suppliers.\n\
+  	All rights reserved.\n\
+       Copyright (c) 1990, 1993, 1994\n\
+  	The Regents of the University of California.  All rights reserved.\n";
+  #endif /* ! lint */
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: mail.local.c,v 8.140 1999/12/25 01:27:21 gshapiro Exp $";
+  #endif /* ! lint */
+  
+  /*
+***************
+*** 31,36 ****
+--- 31,38 ----
+  **  work on such architectures.
+  */
+  
++ #include "mysql_local.h"
++ 
+  #include <sys/types.h>
+  #include <sys/param.h>
+  #include <sys/stat.h>
+***************
+*** 95,106 ****
+  #  define _PATH_MAILDIR	"/var/mail"
+  #endif /* (defined(sun) && defined(__svr4__)) || defined(__SVR4) */
+  
+- #ifdef NCR_MP_RAS3
+- # define USE_LOCKF	1
+- # define HASSNPRINTF	1
+- #  define _PATH_MAILDIR	"/var/mail"
+- #endif /* NCR_MP_RAS3 */
+- 
+  #if defined(_AIX)
+  # define USE_LOCKF	1
+  # define USE_SETEUID	1
+--- 97,102 ----
+***************
+*** 349,354 ****
+--- 345,355 ----
+  			     pw->pw_uid != uid))
+  		from = (pw = getpwuid(uid)) != NULL ? pw->pw_name : "???";
+  
++ 	if (from == NULL && ((from = getlogin()) == NULL ||
++ 			     (pw = get_mysql_pwd(from)) == NULL ||
++ 			     pw->pw_uid != uid))
++ 		from = (pw = get_mysql_uid(uid)) != NULL ? pw->pw_name : "???";
++ 
+  	/*
+  	**  There is no way to distinguish the error status of one delivery
+  	**  from the rest of the deliveries.  So, if we failed hard on one
+***************
+*** 460,465 ****
+--- 461,467 ----
+  	char *addr;
+  {
+  	if (getpwnam(addr) == NULL)
++ 	  if (get_mysql_pwd(addr) == NULL)
+  		return "550 5.1.1 user unknown";
+  	return NULL;
+  }
+***************
+*** 901,929 ****
+  	**  handled in the sendmail aliases file.
+  	*/
+  	if ((pw = getpwnam(name)) == NULL)
+! 	{
+! 		if (ExitVal != EX_TEMPFAIL)
+! 			ExitVal = EX_UNAVAILABLE;
+! 		if (LMTPMode)
+! 		{
+! 			if (ExitVal == EX_TEMPFAIL)
+! 				printf("451 4.3.0 cannot lookup name: %s\r\n", name);
+! 			else
+! 				printf("550 5.1.1 unknown name: %s\r\n", name);
+! 		}
+! 		else
+! 		{
+! 			char *errcode = NULL;
+! 
+! 			if (ExitVal == EX_TEMPFAIL)
+! 				errcode = "451 4.3.0";
+! 			else
+! 				errcode = "550 5.1.1";
+! 			mailerr(errcode, "unknown name: %s", name);
+! 		}
+! 		return;
+! 	}
+! 	endpwent();
+  
+  	/*
+  	**  Keep name reasonably short to avoid buffer overruns.
+--- 903,932 ----
+  	**  handled in the sendmail aliases file.
+  	*/
+  	if ((pw = getpwnam(name)) == NULL)
+! 	  if ((pw = get_mysql_pwd(name)) == NULL)
+! 	  {
+! 		  if (ExitVal != EX_TEMPFAIL)
+! 			  ExitVal = EX_UNAVAILABLE;
+! 		  if (LMTPMode)
+! 		  {
+! 			  if (ExitVal == EX_TEMPFAIL)
+! 				  printf("451 4.3.0 cannot lookup name: %s\r\n", name);
+! 			  else
+! 				  printf("550 5.1.1 unknown name: %s\r\n", name);
+! 		  }
+! 		  else
+! 		  {
+! 			  char *errcode = NULL;
+! 
+! 			  if (ExitVal == EX_TEMPFAIL)
+! 				  errcode = "451 4.3.0";
+! 			  else
+! 				  errcode = "550 5.1.1";
+! 			  mailerr(errcode, "unknown name: %s", name);
+! 		  }
+! 		  return;
+! 	  }
+! 	  endpwent();
+  
+  	/*
+  	**  Keep name reasonably short to avoid buffer overruns.
+diff -Nacr sendmail-8.10.1/mail.local/mysql_local.c sendmail-devel/mail.local/mysql_local.c
+*** sendmail-8.10.1/mail.local/mysql_local.c	Thu Jan  1 08:00:00 1970
+--- sendmail-devel/mail.local/mysql_local.c	Sat Feb  3 17:43:17 2001
+***************
+*** 0 ****
+--- 1,189 ----
++ #include <stdio.h>
++ #include <stdlib.h>
++ #include <string.h>
++ #include <mysql_local.h>
++ 
++ #define CONF_FILE	"/etc/mail/mail.conf"
++ #define BUF_SIZE	128
++ 
++ MYSQL mysql;
++ MYSQL_RES *result;
++ my_ulonglong num_rows;
++ my_ulonglong num_fields;
++ MYSQL_ROW field;
++ struct mysql_sendmail_struct *mysqlconf;
++ 
++ struct mysql_sendmail_struct *get_mysql_conf() {
++ 	static struct mysql_sendmail_struct mss;
++ 	static char host[BUF_SIZE], user[BUF_SIZE], password[BUF_SIZE],
++ 		database[BUF_SIZE], user_table[BUF_SIZE];
++ 
++ 	char buf[256];
++ 	char *name, *value;
++ 	int  pos;
++ 	char *delim = "\n \t";
++ 	FILE *conf;
++ 
++ 	mss.mysql_host = NULL;
++ 	mss.mysql_user = NULL;
++ 	mss.mysql_passwd = NULL;
++ 	mss.mysql_database = NULL;
++ 	mss.mysql_user_table = NULL;
++ 
++ 	if(!(conf = fopen(CONF_FILE, "r")))
++ 		/* Could not open config file */
++ 		return NULL;
++ 	while(fgets(buf, 256, conf)) {
++ 		for(pos=0; strchr(delim+1, buf[pos]) && buf[pos]; pos++)
++ 			;
++ 		name = buf+pos;
++ 		if(*name=='#' || *name=='\n' || *name==0)
++ 			continue;
++ 		for(; !strchr(delim, buf[pos]) && buf[pos]; pos++)
++ 			;
++ 		buf[pos] = 0;
++ 		if(!*name) continue;
++ 		for(pos++; strchr(delim+1, buf[pos]) && buf[pos]; pos++)
++ 			;
++ 		value = buf+pos;
++ 		for(; !strchr(delim, buf[pos]) && buf[pos]; pos++)
++ 			;
++ 		buf[pos] = 0;
++ 		if(!*value) continue;
++ 		switch(name[5]) {
++ 		case 'H':
++ 			if(!strcmp(name, "MysqlHost")) {
++ 				strncpy(host, value, BUF_SIZE);
++ 				mss.mysql_host = host;
++ 			}
++ 			break;
++ 		case 'U':
++ 			if(!strcmp(name, "MysqlUsername")) {
++ 				strncpy(user, value, BUF_SIZE);
++ 				mss.mysql_user = user;
++ 			} else if(!strcmp(name, "MysqlUserTable")) {
++ 				strncpy(user_table, value, BUF_SIZE);
++ 				mss.mysql_user_table = user_table;
++ 			}
++ 			break;
++ 		case 'D':
++ 			if(!strcmp(name, "MysqlDatabase")) {
++ 				strncpy(database, value, BUF_SIZE);
++ 				mss.mysql_database = database;
++ 			} 
++ 			break;
++ 		case 'P':
++ 			if(!strcmp(name, "MysqlPassword")) {
++ 				strncpy(password, value, BUF_SIZE);
++ 				mss.mysql_passwd = password;
++ 			}
++ 			break;
++ 		}
++ 	}
++ 	fclose(conf);
++ 	if(mss.mysql_host && mss.mysql_user && mss.mysql_database && 
++ 		mss.mysql_user_table)
++ 	{
++ 		return &mss;
++ 	}
++ 	return NULL;
++ }
++ 
++ 
++ struct passwd * get_mysql_pwd(char * user_name)
++ {
++ 
++ char queryBuf[256];
++ 	
++ 	static struct passwd pw;
++ 	mysql_init(&mysql);
++ 	mysqlconf = get_mysql_conf();
++   	if(mysqlconf == NULL)
++   	{
++         	return NULL;
++   	}
++ 		if(!mysql_real_connect(&mysql,mysqlconf->mysql_host,mysqlconf->mysql_user,mysqlconf->mysql_passwd,mysqlconf->mysql_database,0,NULL,0))
++ 	{
++ 		mysql_close(&mysql);
++ 		return NULL;
++ 	}
++ 	snprintf(queryBuf, sizeof(queryBuf), "select * from %s where uid = \'%s\'",mysqlconf->mysql_user_table,user_name);
++ 	mysql_query(&mysql, queryBuf);
++ 	if((result=mysql_store_result(&mysql)) == NULL)
++ 	{
++ 		return NULL;
++ 	}
++ 	num_rows=mysql_num_rows(result);
++ 	num_fields=mysql_num_fields(result);
++ 	if(num_rows == 0)
++ 	{
++ 		mysql_free_result(result);
++ 		mysql_close(&mysql);
++ 		return NULL;
++ 	}
++ 
++ 	field=mysql_fetch_row(result);
++ 
++ pw.pw_name = field[0];
++ pw.pw_passwd = field[1];
++ pw.pw_uid = atoi(field[2]);
++ pw.pw_gid = atoi(field[3]);
++ if((pw.pw_gecos = field[4]) == NULL)
++   pw.pw_gecos = ",,,";
++ pw.pw_dir = field[5];
++ if((pw.pw_shell = field[6]) == NULL)
++   pw.pw_shell = "/bin/noshell";
++ mysql_free_result(result);
++ mysql_close(&mysql);
++ return &pw;
++ } 
++ 
++ struct passwd * get_mysql_uid(u_long user_id)
++ {
++ 
++ char queryBuf[256];
++ 	
++ 	static struct passwd pw;
++ 	mysql_init(&mysql);
++ 	mysqlconf = get_mysql_conf();
++   	if(mysqlconf == NULL)
++   	{
++         	return NULL;
++   	}
++ 		if(!mysql_real_connect(&mysql,mysqlconf->mysql_host,mysqlconf->mysql_user,mysqlconf->mysql_passwd,mysqlconf->mysql_database,0,NULL,0))
++ 	{
++ 		mysql_close(&mysql);
++ 		return NULL;
++ 	}
++ 	snprintf(queryBuf, sizeof(queryBuf), "select * from %s where uid = \'%d\'",mysqlconf->mysql_user_table,user_id);
++ 	mysql_query(&mysql, queryBuf);
++ 	if((result=mysql_store_result(&mysql)) == NULL)
++ 	{
++ 		return NULL;
++ 	}
++ 	num_rows=mysql_num_rows(result);
++ 	num_fields=mysql_num_fields(result);
++ 	if(num_rows == 0)
++ 	{
++ 		mysql_free_result(result);
++ 		mysql_close(&mysql);
++ 		return NULL;
++ 	}
++ 
++ 	field=mysql_fetch_row(result);
++ 
++ pw.pw_name = field[0];
++ pw.pw_passwd = field[1];
++ pw.pw_uid = atoi(field[2]);
++ pw.pw_gid = atoi(field[3]);
++ if((pw.pw_gecos = field[4]) == NULL)
++   pw.pw_gecos = ",,,";
++ pw.pw_dir = field[5];
++ if((pw.pw_shell = field[6]) == NULL)
++   pw.pw_shell = "/bin/noshell";
++ mysql_free_result(result);
++ mysql_close(&mysql);
++ return &pw;
++ } 
++ 
++ 
+diff -Nacr sendmail-8.10.1/mail.local/mysql_local.h sendmail-devel/mail.local/mysql_local.h
+*** sendmail-8.10.1/mail.local/mysql_local.h	Thu Jan  1 08:00:00 1970
+--- sendmail-devel/mail.local/mysql_local.h	Sat Feb  3 17:41:04 2001
+***************
+*** 0 ****
+--- 1,16 ----
++ #include <pwd.h>
++ #include <sys/types.h>
++ #include <mysql.h>
++ 
++ struct mysql_sendmail_struct
++ {
++         char            *mysql_host;
++         char            *mysql_user;
++         char            *mysql_passwd;
++         char            *mysql_database;
++         char            *mysql_user_table;
++ };
++ 
++ struct passwd *get_mysql_pwd(char *user_name);
++ struct passwd *get_mysql_uid(u_long user_id);
++ struct mysql_sendmail_struct *get_mysql_conf();
+diff -Nacr sendmail-8.10.1/sendmail/alias.c sendmail-devel/sendmail/alias.c
+*** sendmail-8.10.1/sendmail/alias.c	Mon Apr  3 21:23:16 2000
+--- sendmail-devel/sendmail/alias.c	Sat Feb  3 17:41:04 2001
+***************
+*** 1,5 ****
+  /*
+!  * Copyright (c) 1998-2000 Sendmail, Inc. and its suppliers.
+   *	All rights reserved.
+   * Copyright (c) 1983, 1995-1997 Eric P. Allman.  All rights reserved.
+   * Copyright (c) 1988, 1993
+--- 1,5 ----
+  /*
+!  * Copyright (c) 1998, 1999 Sendmail, Inc. and its suppliers.
+   *	All rights reserved.
+   * Copyright (c) 1983, 1995-1997 Eric P. Allman.  All rights reserved.
+   * Copyright (c) 1988, 1993
+***************
+*** 11,19 ****
+   */
+  
+  #include <sendmail.h>
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: alias.c,v 8.142 2000/03/31 05:35:29 ca Exp $";
+  #endif /* ! lint */
+  
+  static MAP	*AliasFileMap = NULL;	/* the actual aliases.files map */
+--- 11,20 ----
+   */
+  
+  #include <sendmail.h>
++ #include <mysql_sendmail.h>
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: alias.c,v 8.139 2000/01/18 21:55:31 gshapiro Exp $";
+  #endif /* ! lint */
+  
+  static MAP	*AliasFileMap = NULL;	/* the actual aliases.files map */
+***************
+*** 110,115 ****
+--- 111,128 ----
+  		return;
+  	}
+  	if (p == NULL)
++         {
++                 p = get_mysql_alias(a->q_user, &status);
++                 if (status == EX_TEMPFAIL || status == EX_UNAVAILABLE)
++                 {
++                         a->q_flags |= QS_QUEUEUP;
++                         if (e->e_message == NULL)
++                                 e->e_message = newstr("alias database unavailable");
++ 			return;
++                 }
++         }
++ 
++ 	if (p == NULL)
+  		return;
+  
+  	/*
+***************
+*** 165,170 ****
+--- 178,184 ----
+  		(void) strlcat(obuf, a->q_user, sizeof obuf);
+  	owner = aliaslookup(obuf, &status);
+  	if (owner == NULL)
++ 	if((owner = get_mysql_alias(obuf, &status)) == NULL)
+  		return;
+  
+  	/* reflect owner into envelope sender */
+***************
+*** 666,672 ****
+  			*p = '\0';
+  		else if (!feof(af))
+  		{
+- 			errno = 0;
+  			syserr("554 5.3.0 alias line too long");
+  
+  			/* flush to end of line */
+--- 680,685 ----
+***************
+*** 799,827 ****
+  
+  		lhssize = strlen(al.q_user);
+  		rhssize = strlen(rhs);
+! 		if (rhssize > 0)
+! 		{
+! 			/* is RHS empty (just spaces)? */
+! 			p = rhs;
+! 			while (isascii(*p) && isspace(*p))
+! 				p++;
+! 		}
+! 		if (rhssize == 0 || *p == '\0')
+! 		{
+! 			syserr("554 5.3.5 %.40s... missing value for alias",
+! 			       line);
+! 
+! 		}
+! 		else
+! 		{
+! 			map->map_class->map_store(map, al.q_user, rhs);
+! 
+! 			/* statistics */
+! 			naliases++;
+! 			bytes += lhssize + rhssize;
+! 			if (rhssize > longest)
+! 				longest = rhssize;
+! 		}
+  
+  		if (al.q_paddr != NULL)
+  			free(al.q_paddr);
+--- 812,818 ----
+  
+  		lhssize = strlen(al.q_user);
+  		rhssize = strlen(rhs);
+! 		map->map_class->map_store(map, al.q_user, rhs);
+  
+  		if (al.q_paddr != NULL)
+  			free(al.q_paddr);
+***************
+*** 829,834 ****
+--- 820,831 ----
+  			free(al.q_host);
+  		if (al.q_user != NULL)
+  			free(al.q_user);
++ 
++ 		/* statistics */
++ 		naliases++;
++ 		bytes += lhssize + rhssize;
++ 		if (rhssize > longest)
++ 			longest = rhssize;
+  	}
+  
+  	CurEnv->e_to = NULL;
+diff -Nacr sendmail-8.10.1/sendmail/conf.c sendmail-devel/sendmail/conf.c
+*** sendmail-8.10.1/sendmail/conf.c	Thu Mar 23 14:50:20 2000
+--- sendmail-devel/sendmail/conf.c	Sat Feb  3 17:41:04 2001
+***************
+*** 561,566 ****
+--- 561,571 ----
+  		dequote_init, null_map_open, null_map_close,
+  		arith_map_lookup, null_map_store);
+  
++ #ifdef MYSQL_MAP
++         MAPDEF("mysql", NULL, 0,
++                 mysql_map_parseargs, mysql_map_open, mysql_map_close,
++                 mysql_map_lookup, null_map_store);
++ #endif
+  	if (tTd(38, 2))
+  	{
+  		/* bogus map -- always return tempfail */
+diff -Nacr sendmail-8.10.1/sendmail/map.c sendmail-devel/sendmail/map.c
+*** sendmail-8.10.1/sendmail/map.c	Thu Mar 16 15:53:46 2000
+--- sendmail-devel/sendmail/map.c	Sat Feb  3 17:41:04 2001
+***************
+*** 12,18 ****
+   */
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: map.c,v 8.414 2000/03/15 06:13:16 gshapiro Exp $";
+  #endif /* ! lint */
+  
+  #include <sendmail.h>
+--- 12,18 ----
+   */
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: map.c,v 8.402 2000/01/18 19:32:30 gshapiro Exp $";
+  #endif /* ! lint */
+  
+  #include <sendmail.h>
+***************
+*** 1277,1283 ****
+  				   key, data, DBM_REPLACE);
+  	}
+  	if (status != 0)
+! 		syserr("readaliases: dbm put (%s): %d", lhs, status);
+  }
+  
+  
+--- 1277,1283 ----
+  				   key, data, DBM_REPLACE);
+  	}
+  	if (status != 0)
+! 		syserr("readaliases: dbm put (%s)", lhs);
+  }
+  
+  
+***************
+*** 2118,2132 ****
+  	}
+  
+  	/* check to see if this map actually exists */
+- 	vp = NULL;
+  	yperr = yp_match(map->map_domain, map->map_file, "@", 1,
+  			&vp, &vsize);
+  	if (tTd(38, 10))
+  		dprintf("nis_map_open: yp_match(@, %s, %s) => %s\n",
+  			map->map_domain, map->map_file, yperr_string(yperr));
+- 	if (vp != NULL)
+- 		free(vp);
+- 
+  	if (yperr == 0 || yperr == YPERR_KEY || yperr == YPERR_BUSY)
+  	{
+  		/*
+--- 2118,2128 ----
+***************
+*** 2183,2189 ****
+  	if (!bitset(MF_NOFOLDCASE, map->map_mflags))
+  		makelower(keybuf);
+  	yperr = YPERR_KEY;
+- 	vp = NULL;
+  	if (bitset(MF_TRY0NULL, map->map_mflags))
+  	{
+  		yperr = yp_match(map->map_domain, map->map_file, keybuf, buflen,
+--- 2179,2184 ----
+***************
+*** 2193,2203 ****
+  	}
+  	if (yperr == YPERR_KEY && bitset(MF_TRY1NULL, map->map_mflags))
+  	{
+- 		if (vp != NULL)
+- 		{
+- 			free(vp);
+- 			vp = NULL;
+- 		}
+  		buflen++;
+  		yperr = yp_match(map->map_domain, map->map_file, keybuf, buflen,
+  			     &vp, &vsize);
+--- 2188,2193 ----
+***************
+*** 2208,2228 ****
+  	{
+  		if (yperr != YPERR_KEY && yperr != YPERR_BUSY)
+  			map->map_mflags &= ~(MF_VALID|MF_OPEN);
+- 		if (vp != NULL)
+- 			free(vp);
+  		return NULL;
+  	}
+  	if (bitset(MF_MATCHONLY, map->map_mflags))
+  		return map_rewrite(map, name, strlen(name), NULL);
+  	else
+! 	{
+! 		char *ret;
+! 
+! 		ret = map_rewrite(map, vp, vsize, av);
+! 		if (vp != NULL)
+! 			free(vp);
+! 		return ret;
+! 	}
+  }
+  
+  
+--- 2198,2209 ----
+  	{
+  		if (yperr != YPERR_KEY && yperr != YPERR_BUSY)
+  			map->map_mflags &= ~(MF_VALID|MF_OPEN);
+  		return NULL;
+  	}
+  	if (bitset(MF_MATCHONLY, map->map_mflags))
+  		return map_rewrite(map, name, strlen(name), NULL);
+  	else
+! 		return map_rewrite(map, vp, vsize, av);
+  }
+  
+  
+***************
+*** 2262,2268 ****
+  		(void) yp_get_default_domain(&yp_domain);
+  	makelower(nbuf);
+  	yperr = YPERR_KEY;
+- 	vp = NULL;
+  	if (try0null)
+  	{
+  		yperr = yp_match(yp_domain, "hosts.byname", nbuf, keylen,
+--- 2243,2248 ----
+***************
+*** 2272,2282 ****
+  	}
+  	if (yperr == YPERR_KEY && try1null)
+  	{
+- 		if (vp != NULL)
+- 		{
+- 			free(vp);
+- 			vp = NULL;
+- 		}
+  		keylen++;
+  		yperr = yp_match(yp_domain, "hosts.byname", nbuf, keylen,
+  			     &vp, &vsize);
+--- 2252,2257 ----
+***************
+*** 2291,2302 ****
+  			*statp = EX_TEMPFAIL;
+  		else
+  			*statp = EX_UNAVAILABLE;
+- 		if (vp != NULL)
+- 			free(vp);
+  		return FALSE;
+  	}
+  	(void) strlcpy(host_record, vp, sizeof host_record);
+- 	free(vp);
+  	if (tTd(38, 44))
+  		dprintf("got record `%s'\n", host_record);
+  	if (!extract_canonname(nbuf, host_record, cbuf, sizeof cbuf))
+--- 2266,2274 ----
+***************
+*** 2881,2888 ****
+  	lmap = (LDAPMAP_STRUCT *) map->map_db1;
+  
+  	if (tTd(38,9))
+! 		dprintf("ldapmap_start(%s, %d)\n",
+! 			lmap->ldap_host == NULL ? "localhost" : lmap->ldap_host,
+  			lmap->ldap_port);
+  
+  # if USE_LDAP_INIT
+--- 2853,2859 ----
+  	lmap = (LDAPMAP_STRUCT *) map->map_db1;
+  
+  	if (tTd(38,9))
+! 		dprintf("ldapmap_start(%s, %d)\n", lmap->ldap_host,
+  			lmap->ldap_port);
+  
+  # if USE_LDAP_INIT
+***************
+*** 2902,2908 ****
+  			if (LogLevel > 1)
+  				sm_syslog(LOG_NOTICE, CurEnv->e_id,
+  					  "timeout conning to LDAP server %.100s",
+! 					  lmap->ldap_host == NULL ? "localhost" : lmap->ldap_host);
+  			return FALSE;
+  		}
+  		ev = setevent(lmap->ldap_timeout.tv_sec, ldaptimeout, 0);
+--- 2873,2879 ----
+  			if (LogLevel > 1)
+  				sm_syslog(LOG_NOTICE, CurEnv->e_id,
+  					  "timeout conning to LDAP server %.100s",
+! 					  lmap->ldap_host);
+  			return FALSE;
+  		}
+  		ev = setevent(lmap->ldap_timeout.tv_sec, ldaptimeout, 0);
+***************
+*** 2928,2936 ****
+  # else /* USE_LDAP_INIT */
+  				       "ldap_open",
+  # endif /* USE_LDAP_INIT */
+! 				       lmap->ldap_host == NULL ? "localhost"
+! 							       : lmap->ldap_host,
+! 				       map->map_mname);
+  			else
+  				syserr("421 4.0.0 %s failed to %s in map %s",
+  # if USE_LDAP_INIT
+--- 2899,2905 ----
+  # else /* USE_LDAP_INIT */
+  				       "ldap_open",
+  # endif /* USE_LDAP_INIT */
+! 				       lmap->ldap_host, map->map_mname);
+  			else
+  				syserr("421 4.0.0 %s failed to %s in map %s",
+  # if USE_LDAP_INIT
+***************
+*** 2938,2946 ****
+  # else /* USE_LDAP_INIT */
+  				       "ldap_open",
+  # endif /* USE_LDAP_INIT */
+! 				       lmap->ldap_host == NULL ? "localhost"
+! 							       : lmap->ldap_host,
+! 				       map->map_mname);
+  		}
+  		return FALSE;
+  	}
+--- 2907,2913 ----
+  # else /* USE_LDAP_INIT */
+  				       "ldap_open",
+  # endif /* USE_LDAP_INIT */
+! 				       lmap->ldap_host, map->map_mname);
+  		}
+  		return FALSE;
+  	}
+***************
+*** 2961,2968 ****
+  			if (LogLevel > 1)
+  				sm_syslog(LOG_NOTICE, CurEnv->e_id,
+  					  "timeout conning to LDAP server %.100s",
+! 					  lmap->ldap_host == NULL ? "localhost"
+! 								  : lmap->ldap_host);
+  			return FALSE;
+  		}
+  		ev = setevent(lmap->ldap_timeout.tv_sec, ldaptimeout, 0);
+--- 2928,2934 ----
+  			if (LogLevel > 1)
+  				sm_syslog(LOG_NOTICE, CurEnv->e_id,
+  					  "timeout conning to LDAP server %.100s",
+! 					  lmap->ldap_host);
+  			return FALSE;
+  		}
+  		ev = setevent(lmap->ldap_timeout.tv_sec, ldaptimeout, 0);
+***************
+*** 2997,3003 ****
+  		{
+  			syserr("421 4.0.0 Cannot bind to map %s in ldap server %s",
+  			       map->map_mname,
+! 			       lmap->ldap_host == NULL ? "localhost" : lmap->ldap_host);
+  		}
+  		return FALSE;
+  	}
+--- 2963,2969 ----
+  		{
+  			syserr("421 4.0.0 Cannot bind to map %s in ldap server %s",
+  			       map->map_mname,
+! 			       (lmap->ldap_host == NULL ? "localhost" : lmap->ldap_host));
+  		}
+  		return FALSE;
+  	}
+***************
+*** 3228,3235 ****
+  				(void) ldap_abandon(lmap->ldap_ld, msgid);
+  				if (vp != NULL)
+  					free(vp);
+- 				if (tTd(38, 25))
+- 					dprintf("ldap search found multiple on a single match query\n");
+  				return NULL;
+  			}
+  		}
+--- 3194,3199 ----
+***************
+*** 3801,3807 ****
+  		  case 'v':		/* attr to return */
+  			while (isascii(*++p) && isspace(*p))
+  				continue;
+! 			lmap->ldap_attr[0] = p;
+  			lmap->ldap_attr[1] = NULL;
+  			break;
+  
+--- 3765,3771 ----
+  		  case 'v':		/* attr to return */
+  			while (isascii(*++p) && isspace(*p))
+  				continue;
+! 			lmap->ldap_attr[0] = ldapmap_dequote(p);
+  			lmap->ldap_attr[1] = NULL;
+  			break;
+  
+***************
+*** 4010,4032 ****
+  	**  and dump it into map->map_dbptr1
+  	*/
+  
+! 	if (lmap->ldap_host != NULL &&
+! 	    (LDAPDefaults == NULL ||
+! 	     LDAPDefaults == lmap ||
+! 	     LDAPDefaults->ldap_host != lmap->ldap_host))
+  		lmap->ldap_host = newstr(ldapmap_dequote(lmap->ldap_host));
+  	map->map_domain = lmap->ldap_host;
+  
+! 	if (lmap->ldap_binddn != NULL &&
+! 	    (LDAPDefaults == NULL ||
+! 	     LDAPDefaults == lmap ||
+! 	     LDAPDefaults->ldap_binddn != lmap->ldap_binddn))
+  		lmap->ldap_binddn = newstr(ldapmap_dequote(lmap->ldap_binddn));
+  
+! 	if (lmap->ldap_secret != NULL &&
+! 	    (LDAPDefaults == NULL ||
+! 	     LDAPDefaults == lmap ||
+! 	     LDAPDefaults->ldap_secret != lmap->ldap_secret))
+  	{
+  		FILE *sfd;
+  		long sff = SFF_OPENASROOT|SFF_ROOTOK|SFF_NOWLINK|SFF_NOWWFILES|SFF_NOGWFILES;
+--- 3974,3987 ----
+  	**  and dump it into map->map_dbptr1
+  	*/
+  
+! 	if (lmap->ldap_host != NULL)
+  		lmap->ldap_host = newstr(ldapmap_dequote(lmap->ldap_host));
+  	map->map_domain = lmap->ldap_host;
+  
+! 	if (lmap->ldap_binddn != NULL)
+  		lmap->ldap_binddn = newstr(ldapmap_dequote(lmap->ldap_binddn));
+  
+! 	if (lmap->ldap_secret != NULL)
+  	{
+  		FILE *sfd;
+  		long sff = SFF_OPENASROOT|SFF_ROOTOK|SFF_NOWLINK|SFF_NOWWFILES|SFF_NOGWFILES;
+***************
+*** 4094,4109 ****
+  		}
+  	}
+  
+! 	if (lmap->ldap_secret != NULL &&
+! 	    (LDAPDefaults == NULL ||
+! 	     LDAPDefaults == lmap ||
+! 	     LDAPDefaults->ldap_secret != lmap->ldap_secret))
+  		lmap->ldap_secret = newstr(ldapmap_dequote(lmap->ldap_secret));
+  
+! 	if (lmap->ldap_base != NULL &&
+! 	    (LDAPDefaults == NULL ||
+! 	     LDAPDefaults == lmap ||
+! 	     LDAPDefaults->ldap_base != lmap->ldap_base))
+  		lmap->ldap_base = newstr(ldapmap_dequote(lmap->ldap_base));
+  
+  	/*
+--- 4049,4058 ----
+  		}
+  	}
+  
+! 	if (lmap->ldap_secret != NULL)
+  		lmap->ldap_secret = newstr(ldapmap_dequote(lmap->ldap_secret));
+  
+! 	if (lmap->ldap_base != NULL)
+  		lmap->ldap_base = newstr(ldapmap_dequote(lmap->ldap_base));
+  
+  	/*
+***************
+*** 4135,4141 ****
+  	if (lmap->ldap_attr[0] != NULL)
+  	{
+  		i = 0;
+! 		p = ldapmap_dequote(lmap->ldap_attr[0]);
+  		lmap->ldap_attr[0] = NULL;
+  
+  		while (p != NULL)
+--- 4084,4090 ----
+  	if (lmap->ldap_attr[0] != NULL)
+  	{
+  		i = 0;
+! 		p = lmap->ldap_attr[0];
+  		lmap->ldap_attr[0] = NULL;
+  
+  		while (p != NULL)
+***************
+*** 4153,4161 ****
+  
+  			if (i == LDAPMAP_MAX_ATTR)
+  			{
+! 				syserr("Too many return attributes in %s (max %d)",
+! 				       map->map_mname, LDAPMAP_MAX_ATTR);
+! 				return FALSE;
+  			}
+  			if (*v != '\0')
+  				lmap->ldap_attr[i++] = newstr(v);
+--- 4102,4115 ----
+  
+  			if (i == LDAPMAP_MAX_ATTR)
+  			{
+! 				if (bitset(MCF_OPTFILE, map->map_class->map_cflags))
+! 				{
+! 					syserr("Too many return attributes in %s (max %d)",
+! 					       map->map_mname, LDAPMAP_MAX_ATTR);
+! 					return FALSE;
+! 				}
+! 				else
+! 					break;
+  			}
+  			if (*v != '\0')
+  				lmap->ldap_attr[i++] = newstr(v);
+***************
+*** 4591,4597 ****
+  				continue;
+  			}
+  			if (server_data != NULL)
+! 				FreeQIR(server_data);
+  #endif /* _FFR_PHMAP_TIMEOUT */
+  			free(hostlist);
+  			return TRUE;
+--- 4545,4551 ----
+  				continue;
+  			}
+  			if (server_data != NULL)
+! 				free(server_data);
+  #endif /* _FFR_PHMAP_TIMEOUT */
+  			free(hostlist);
+  			return TRUE;
+***************
+*** 4647,4653 ****
+  	char *tmp, *tmp2;
+  	char *message = NULL, *field = NULL, *fmtkey;
+  	QIR *server_data = NULL;
+- 	QIR *qirp;
+  	char keybuf[MAXKEY + 1], fieldbuf[101];
+  #if _FFR_PHMAP_TIMEOUT
+  	QIR *hold_data[MAX_PH_FIELDS];
+--- 4601,4606 ----
+***************
+*** 4710,4716 ****
+  
+  			for (tmp2 = fmtkey; *tmp2 !=  '\0'; tmp2++)
+  			{
+! 				if (isascii(*tmp2) && ispunct(*tmp2))
+  					*tmp2 = '-';
+  			}
+  			tmp2 = field;
+--- 4663,4669 ----
+  
+  			for (tmp2 = fmtkey; *tmp2 !=  '\0'; tmp2++)
+  			{
+! 				if (ispunct(*tmp2))
+  					*tmp2 = '-';
+  			}
+  			tmp2 = field;
+***************
+*** 4723,4733 ****
+  			*/
+  
+  			for (tmp2 = fmtkey; *tmp2 != '\0'; tmp2++)
+! 			{
+! 				if (isascii(*tmp2) && ispunct(*tmp2) &&
+! 				    *tmp2 != '*')
+  					*tmp2 = ' ';
+- 			}
+  			tmp2 = &(field[6]);
+  		}
+  		else
+--- 4676,4683 ----
+  			*/
+  
+  			for (tmp2 = fmtkey; *tmp2 != '\0'; tmp2++)
+! 				if (ispunct(*tmp2) && *tmp2 != '*')
+  					*tmp2 = ' ';
+  			tmp2 = &(field[6]);
+  		}
+  		else
+***************
+*** 4771,4777 ****
+  #else /* _FFR_PHMAP_TIMEOUT */
+  			if (server_data != NULL)
+  			{
+! 				FreeQIR(server_data);
+  				server_data = NULL;
+  			}
+  			return NULL;
+--- 4721,4727 ----
+  #else /* _FFR_PHMAP_TIMEOUT */
+  			if (server_data != NULL)
+  			{
+! 				free(server_data);
+  				server_data = NULL;
+  			}
+  			return NULL;
+***************
+*** 4785,4822 ****
+  
+  		if (j == 1)
+  			break;
+- 
+- 		/*
+- 		**  check for a single response which is an error:
+- 		**  ReadQi() doesn't set j on error responses,
+- 		**  but we should stop here instead of moving on if
+- 		**  it happens (e.g., alias found but email field empty)
+- 		*/
+- 
+- 		for (qirp = server_data;
+- 		     qirp != NULL && qirp->code < 0;
+- 		     qirp++)
+- 		{
+- 			if (tTd(38, 20))
+- 				dprintf("ph_map_lookup: QIR: %d:%d:%d:%s\n",
+- 					qirp->code, qirp->subcode, qirp->field,
+- 					(qirp->message ? qirp->message
+- 					 : "[NULL]"));
+- 			if (qirp->code <= -500)
+- 			{
+- 				j = 0;
+- 				goto ph_map_lookup_abort;
+- 			}
+- 		}
+- 
+  #if _FFR_PHMAP_TIMEOUT
+  	} while (*tmp != '\0' && hold_data_idx < MAX_PH_FIELDS);
+  #else /* _FFR_PHMAP_TIMEOUT */
+  	} while (*tmp != '\0');
+  #endif /* _FFR_PHMAP_TIMEOUT */
+  
+-   ph_map_lookup_abort:
+  #if _FFR_PHMAP_TIMEOUT
+  	if (ev != NULL)
+  		clrevent(ev);
+  
+--- 4735,4748 ----
+  
+  		if (j == 1)
+  			break;
+  #if _FFR_PHMAP_TIMEOUT
+  	} while (*tmp != '\0' && hold_data_idx < MAX_PH_FIELDS);
+  #else /* _FFR_PHMAP_TIMEOUT */
+  	} while (*tmp != '\0');
+  #endif /* _FFR_PHMAP_TIMEOUT */
+  
+  #if _FFR_PHMAP_TIMEOUT
++   ph_map_lookup_abort:
+  	if (ev != NULL)
+  		clrevent(ev);
+  
+***************
+*** 4834,4864 ****
+  
+  	if (*pstat == EX_OK)
+  	{
+- 		/*
+- 		** skip leading whitespace and chop at first address
+- 		*/
+- 
+- 		for (tmp = server_data->message;
+- 		     isascii(*tmp) && isspace(*tmp);
+- 		     tmp++)
+- 			continue;
+- 
+- 		for (tmp2 = tmp; *tmp2 != '\0'; tmp2++)
+- 		{
+- 			if (isascii(*tmp2) && isspace(*tmp2))
+- 			{
+- 				*tmp2 = '\0';
+- 				break;
+- 			}
+- 		}
+- 
+  		if (tTd(38,20))
+! 			dprintf("ph_map_lookup: %s => %s\n", key, tmp);
+  
+  		if (bitset(MF_MATCHONLY, map->map_mflags))
+  			message = map_rewrite(map, key, strlen(key), NULL);
+  		else
+! 			message = map_rewrite(map, tmp, strlen(tmp), args);
+  	}
+  
+  	/*
+--- 4760,4775 ----
+  
+  	if (*pstat == EX_OK)
+  	{
+  		if (tTd(38,20))
+! 			dprintf("ph_map_lookup: %s => %s\n",
+! 				key, server_data->message);
+  
+  		if (bitset(MF_MATCHONLY, map->map_mflags))
+  			message = map_rewrite(map, key, strlen(key), NULL);
+  		else
+! 			message = map_rewrite(map, server_data->message,
+! 					      strlen(server_data->message),
+! 					      args);
+  	}
+  
+  	/*
+***************
+*** 4885,4924 ****
+  		*pstat = EX_UNAVAILABLE;
+  		if (server_data != NULL)
+  		{
+! 			FreeQIR(server_data);
+  			server_data = NULL;
+  		}
+  		return NULL;
+  	}
+  
+- 	/*
+- 	** skip leading whitespace and chop at first address
+- 	*/
+- 
+- 	for (tmp = server_data->message;
+- 	     isascii(*tmp) && isspace(*tmp);
+- 	     tmp++)
+- 		continue;
+- 
+- 	for (tmp2 = tmp; *tmp2 != '\0'; tmp2++)
+- 	{
+- 		if (isascii(*tmp2) && isspace(*tmp2))
+- 		{
+- 			*tmp2 = '\0';
+- 			break;
+- 		}
+- 	}
+- 
+  	if (tTd(38,20))
+! 		dprintf("ph_map_lookup: %s => %s\n", key, tmp);
+  
+  	if (bitset(MF_MATCHONLY, map->map_mflags))
+  		message = map_rewrite(map, key, strlen(key), NULL);
+  	else
+! 		message = map_rewrite(map, tmp, strlen(tmp), args);
+  	if (server_data != NULL)
+  	{
+! 		FreeQIR(server_data);
+  		server_data = NULL;
+  	}
+  	return message;
+--- 4796,4819 ----
+  		*pstat = EX_UNAVAILABLE;
+  		if (server_data != NULL)
+  		{
+! 			free(server_data);
+  			server_data = NULL;
+  		}
+  		return NULL;
+  	}
+  
+  	if (tTd(38,20))
+! 		dprintf("ph_map_lookup: %s => %s\n",
+! 			key, server_data->message);
+  
+  	if (bitset(MF_MATCHONLY, map->map_mflags))
+  		message = map_rewrite(map, key, strlen(key), NULL);
+  	else
+! 		message = map_rewrite(map, server_data->message,
+! 				      strlen(server_data->message), args);
+  	if (server_data != NULL)
+  	{
+! 		free(server_data);
+  		server_data = NULL;
+  	}
+  	return message;
+***************
+*** 6287,6295 ****
+  		/* find beginning of map name */
+  		while (isascii(*ap) && isspace(*ap))
+  			ap++;
+! 		for (p = ap;
+! 		     (isascii(*p) && isalnum(*p)) || *p == '_' || *p == '.';
+! 		     p++)
+  			continue;
+  		if (*p != '\0')
+  			*p++ = '\0';
+--- 6182,6188 ----
+  		/* find beginning of map name */
+  		while (isascii(*ap) && isspace(*ap))
+  			ap++;
+! 		for (p = ap; isascii(*p) && isalnum(*p); p++)
+  			continue;
+  		if (*p != '\0')
+  			*p++ = '\0';
+***************
+*** 7064,7072 ****
+  	char **av;
+  	int *statp;
+  {
+! 	long r;
+! 	long v[2];
+! 	bool res = FALSE;
+  	bool boolres;
+  	static char result[16];
+  	char **cpp;
+--- 6957,6963 ----
+  	char **av;
+  	int *statp;
+  {
+! 	int r, v[2];
+  	bool boolres;
+  	static char result[16];
+  	char **cpp;
+***************
+*** 7088,7094 ****
+  	**  - just ignores args after the second
+  	*/
+  	for (++cpp; cpp != NULL && *cpp != NULL && r < 2; cpp++)
+! 		v[r++] = strtol(*cpp, NULL, 0);
+  
+  	/* operator and (at least) two operands given? */
+  	if (name != NULL && r == 2)
+--- 6979,6985 ----
+  	**  - just ignores args after the second
+  	*/
+  	for (++cpp; cpp != NULL && *cpp != NULL && r < 2; cpp++)
+! 		v[r++] = atoi(*cpp);
+  
+  	/* operator and (at least) two operands given? */
+  	if (name != NULL && r == 2)
+***************
+*** 7130,7141 ****
+  			break;
+  
+  		  case 'l':
+! 			res = v[0] < v[1];
+  			boolres = TRUE;
+  			break;
+  
+  		  case '=':
+! 			res = v[0] == v[1];
+  			boolres = TRUE;
+  			break;
+  
+--- 7021,7032 ----
+  			break;
+  
+  		  case 'l':
+! 			r = v[0] < v[1];
+  			boolres = TRUE;
+  			break;
+  
+  		  case '=':
+! 			r = v[0] == v[1];
+  			boolres = TRUE;
+  			break;
+  
+***************
+*** 7149,7159 ****
+  			return NULL;
+  		}
+  		if (boolres)
+! 			snprintf(result, sizeof result, res ? "TRUE" : "FALSE");
+  		else
+! 			snprintf(result, sizeof result, "%ld", r);
+  		return result;
+  	}
+  	*statp = EX_CONFIG;
+  	return NULL;
+  }
+--- 7040,7421 ----
+  			return NULL;
+  		}
+  		if (boolres)
+! 			snprintf(result, sizeof result, r ? "TRUE" : "FALSE");
+  		else
+! 			snprintf(result, sizeof result, "%d", r);
+  		return result;
+  	}
+  	*statp = EX_CONFIG;
+  	return NULL;
+  }
++ 
++ /* ########## MySQL MAP #################### */
++ 
++ #include <stdio.h>
++ #include <stdlib.h>
++ #include <string.h>
++ #include <mysql.h>
++ #include <mysql_sendmail.h>
++ 
++ MYSQL mysql;
++ MYSQL_RES *sql_result;
++ my_ulonglong num_rows;
++ MYSQL_ROW field;
++ my_ulonglong num_fields;
++ char *result;
++ 
++ MYSQL_MAP_STRUCT *mysqlmap;
++ 
++ mysql_map_open(map, mode)
++         MAP *map;
++         int mode;
++ {
++ 	int *statp;
++ 
++ 	mysqlmap = (MYSQL_MAP_STRUCT *) map->map_db1;
++ 	mysql_init(&mysql);
++ 	if(!mysql_real_connect(&mysql,mysqlmap->mysql_host,mysqlmap->mysql_user,mysqlmap->mysql_passwd,mysqlmap->mysql_database,0,NULL,0))
++ 	{
++                 sm_syslog(LOG_INFO, NOQID,
++                 "Connection to MySQL server failed(%s)",mysql_error(&mysql));
++                 mysql_close(&mysql);
++ 		return FALSE;
++ 	}
++  	if (tTd(38, 2))
++                 printf("mysql_map_open(%s, %d)\n", map->map_mname,mode);
++ #ifdef MYSQL_VERBOSE
++ 
++ 	sm_syslog(LOG_INFO, NOQID,
++                 "Connecting to MySQL server(%s)",mysqlmap->mysql_host);
++ 
++ #endif
++ 
++         mode &= O_ACCMODE;
++ //         if (mode != O_RDONLY)
++ //         {
++ //                 return FALSE;
++ //         }
++         return TRUE;
++ 
++ }
++ char *mysql_map_lookup(map, name, av, statp)
++         MAP *map;
++         char *name;
++         char **av;
++         int *statp;
++ 
++ {
++         MYSQL_MAP_STRUCT *mysqlmap = NULL;
++         char keybuf[MAXNAME + 1];
++ 	int name_len;
++ 	char queryBuf[256];
++ 
++         if (tTd(38, 20))
++                 printf("mysql_map_lookup(%s, %s)\n", map->map_mname, name);
++ 	if(!mysql_map_open(map))
++ 	{
++                 sm_syslog(LOG_INFO, NOQID,"Error connecting to server");
++                 mysql_close(&mysql);
++                 *statp = EX_TEMPFAIL;
++                 return NULL;
++ 	}
++ 	mysqlmap = (MYSQL_MAP_STRUCT *) map->map_db1;
++ 	name_len = strlen(name);
++         if (name_len > MAXNAME)
++                 name_len = MAXNAME;
++         strncpy(keybuf, name, name_len);
++         keybuf[name_len] = '\0';
++ 
++ #ifdef MYSQL_VERBOSE
++ 
++         sm_syslog(LOG_INFO, NOQID,"Looking up %s in domainalias table\n",keybuf);
++ 
++ #endif
++ 	snprintf(queryBuf, sizeof(queryBuf), "select %s from %s where %s = \'%s\'",mysqlmap->mysql_rhs_col,mysqlmap->mysql_map_table,mysqlmap->mysql_lhs_col,keybuf);
++ 	mysql_query(&mysql, queryBuf);
++ 	sql_result = mysql_store_result(&mysql); 
++ 	if(sql_result == NULL)
++ 	{
++ 		sm_syslog(LOG_INFO, NOQID,"Error sending query to server");
++ 		mysql_close(&mysql);
++                 *statp = EX_TEMPFAIL;
++ 		return NULL;
++ 	}
++ 	num_rows=mysql_num_rows(sql_result);
++ 	if(num_rows == 0)
++ 	{
++ #ifdef MYSQL_VERBOSE
++ 
++ 		sm_syslog(LOG_INFO, NOQID,"Not found...\n");
++ 
++ #endif
++                 result = NULL;
++                 *statp = EX_NOTFOUND;
++ 		goto exit;
++ 	}
++ 	field=mysql_fetch_row(sql_result);
++ 	result = field[0];
++ 	*statp = EX_OK;
++ #ifdef MYSQL_VERBOSE
++ 
++ 	sm_syslog(LOG_INFO, NOQID,"Found, rewriting to: %s", field[0]);
++ 
++ #endif
++ 
++ exit:	
++ 	if(sql_result != NULL)
++ 	{
++ 		mysql_free_result(sql_result);
++ 	}
++ 	mysql_map_close(map);
++ 
++ 	if(!result)
++ 		return NULL;
++ 
++ 	if (bitset(MF_MATCHONLY, map->map_mflags))
++ 		return map_rewrite(map, result, strlen(result), NULL);
++ 	else
++ 		return map_rewrite(map, result, strlen(result), av);
++ 
++ //	return result;
++ 
++ }
++ 
++ int mysql_map_close(map)
++ {
++ #ifdef MYSQL_VERBOSE
++ 
++         sm_syslog(LOG_INFO, NOQID,"Disconnecting from MySQL server");
++ 
++ #endif
++ 	mysql_close(&mysql);
++ }
++ 
++ char *
++ mysql_map_dequote(str)
++         char *str;
++ {
++         char *p;
++         char *start;
++         p = str;
++ 
++         if (*p == '"')
++         {
++                 start = ++p;
++         }
++         else
++         {
++                 return(str);
++         }
++         while (*p != '"' && *p != '\0')
++         {
++                 p++;
++         }
++         if (*p != '\0')
++                 *p = '\0';
++         return start;
++ }
++ 
++ // #endif
++ bool mysql_map_parseargs(map,args)
++         MAP *map;
++         char *args;
++ 
++ {
++ 
++ 	MYSQL_MAP_STRUCT *mysqlmap_conf;
++ 	char *result;
++         register char *p = args;
++         register int done;
++ 	if((mysqlmap_conf  = get_mysql_conf()) == NULL)
++ 	{
++ 		
++ 		sm_syslog(LOG_INFO, NOQID,"Error reading config file");
++ 		return FALSE;
++ 	}
++         mysqlmap  = (MYSQL_MAP_STRUCT *) xalloc(sizeof(MYSQL_MAP_STRUCT));
++ 
++ 	memcpy(mysqlmap,mysqlmap_conf,sizeof(MYSQL_MAP_STRUCT));
++ 
++ 	        map->map_mflags |= MF_TRY0NULL | MF_TRY1NULL;
++         for (;;)
++         {
++                 while (isascii(*p) && isspace(*p))
++                         p++;
++                 if (*p != '-')
++                         break;
++                 switch (*++p)
++                 {
++                   case 'N':
++                         map->map_mflags |= MF_INCLNULL;
++                         map->map_mflags &= ~MF_TRY0NULL;
++                         break;
++ 
++                   case 'O':
++                         map->map_mflags &= ~MF_TRY1NULL;
++                         break;
++ 
++                   case 'o':
++ 
++                         map->map_mflags |= MF_OPTIONAL;
++                         break;
++ 
++                   case 'f':
++                         map->map_mflags |= MF_NOFOLDCASE;
++                         break;
++ 
++                   case 'm':
++                         map->map_mflags |= MF_MATCHONLY;
++                         break;
++ 
++                   case 'A':
++                         map->map_mflags |= MF_APPEND;
++                         break;
++ 
++                   case 'q':
++                         map->map_mflags |= MF_KEEPQUOTES;
++                         break;
++ 
++                   case 't':
++                         map->map_mflags |= MF_NODEFER;
++                         break;
++ 
++                   case 'a':
++                         map->map_app = ++p;
++                         break;
++                   case 'T':
++                         map->map_tapp = ++p;
++                         break;
++ 
++                   case 'H':             /* mysql host */
++                         while (isascii(*++p) && isspace(*p))
++                                 continue;
++                         map->map_domain = p;
++                         mysqlmap->mysql_host = p;
++                         break;
++ 
++                   case 'D':             /* mysql database */
++                         while (isascii(*++p) && isspace(*p))
++                                 continue;
++                         mysqlmap->mysql_database = p;
++                         break;
++ 
++ 
++                   case 'M':             /* mysql map table */
++                         while (isascii(*++p) && isspace(*p))
++                                 continue;
++                         mysqlmap->mysql_map_table = p;
++                         break;
++ 
++                   case 'P':             /* mysql passwd */
++                         while (isascii(*++p) && isspace(*p))
++                                 continue;
++                         mysqlmap->mysql_passwd = p;
++                         break;
++ 
++                   case 'U':             /* mysql username */
++                         while (isascii(*++p) && isspace(*p))
++                                 continue;
++                         mysqlmap->mysql_user = p;
++                         break;
++ 
++                   case 'L':             /* mysql LHS table */
++                         while (isascii(*++p) && isspace(*p))
++                                 continue;
++                         mysqlmap->mysql_lhs_col = p;
++                         break;
++ 
++                   case 'R':             /* mysql RHS table */
++                         while (isascii(*++p) && isspace(*p))
++                                 continue;
++                         mysqlmap->mysql_rhs_col = p;
++                         break;
++ 		
++ 		}
++                 /* need to account for quoted strings here arggg... */
++                 done =  isascii(*p) && isspace(*p);
++                 while (*p != '\0' && !done)
++                 {
++                         if (*p == '"')
++                         {
++                                 while (*++p != '"' && *p != '\0')
++                                 {
++                                         continue;
++                                 }
++                                 if (*p != '\0')
++                                         p++;
++                         }
++                         else
++                         {
++                                 p++;
++                         }
++                         done = isascii(*p) && isspace(*p);
++                 }
++ 
++                 if (*p != '\0')
++                         *p++ = '\0';
++ 	}
++         if (map->map_app != NULL)
++                 map->map_app = newstr(mysql_map_dequote(map->map_app));
++         if (map->map_tapp != NULL)
++                 map->map_tapp = newstr(mysql_map_dequote(map->map_tapp));
++         if (map->map_domain != NULL)
++                 map->map_domain = newstr(mysql_map_dequote(map->map_domain));
++ 
++ 
++         if (mysqlmap->mysql_host != NULL)
++ 		mysqlmap->mysql_host = newstr(mysql_map_dequote(mysqlmap->mysql_host));
++ 	else {
++                 syserr("MySQL map: -H for Host is required");
++ 		sm_syslog(LOG_INFO, NOQID,"Error getting server hostname");
++ 	        return FALSE;
++ 	}
++         if (mysqlmap->mysql_user != NULL)
++ 		mysqlmap->mysql_user = newstr(mysql_map_dequote(mysqlmap->mysql_user));
++ 	else {
++                 syserr("MySQL map: Username is required");
++ 		                sm_syslog(LOG_INFO, NOQID,"Error getting databse username");
++                 return FALSE;
++ 	}
++ //        if (mysqlmap->mysql_passwd != NULL)
++ //                mysqlmap->mysql_passwd = newstr(mysql_map_dequote(mysqlmap->mysql_passwd));
++ //	else {
++ //                syserr("MySQL map: -P for Password is required");
++ //                sm_syslog(LOG_INFO, NOQID,"Error getting database password");
++ //                return FALSE;
++ //	}
++         if (mysqlmap->mysql_database != NULL)
++                 mysqlmap->mysql_database = newstr(mysql_map_dequote(mysqlmap->mysql_database));
++ 	else {
++                 syserr("MySQL map: -D for Database name is required");
++                 sm_syslog(LOG_INFO, NOQID,"Error getting database name");
++                 return FALSE;
++ 	}
++         if (mysqlmap->mysql_map_table != NULL)
++                 mysqlmap->mysql_map_table = newstr(mysql_map_dequote(mysqlmap->mysql_map_table));
++ 	else {
++                 syserr("MySQL map: -M for Map table is required");
++                 sm_syslog(LOG_INFO, NOQID,"Error getting map table name");
++                 return FALSE;
++ 	}
++ 
++         if (mysqlmap->mysql_lhs_col != NULL)
++                 mysqlmap->mysql_lhs_col = newstr(mysql_map_dequote(mysqlmap->mysql_lhs_col));
++ 	else {
++                 syserr("MySQL map: -L for LHS column is required");
++                 sm_syslog(LOG_INFO, NOQID,"Error getting RHS column  name");
++                 return FALSE;
++ 	}
++ 
++         if (mysqlmap->mysql_rhs_col != NULL)
++                 mysqlmap->mysql_rhs_col = newstr(mysql_map_dequote(mysqlmap->mysql_rhs_col));
++ 	else {
++                 syserr("MySQL map: -R for RHS column is required");
++                 sm_syslog(LOG_INFO, NOQID,"Error getting RHS column name");
++                 return FALSE;
++ 	}
++ 
++         map->map_db1 = (ARBPTR_T) mysqlmap;
++ 	return TRUE;
++ }
++ 
+diff -Nacr sendmail-8.10.1/sendmail/mysql_sendmail.c sendmail-devel/sendmail/mysql_sendmail.c
+*** sendmail-8.10.1/sendmail/mysql_sendmail.c	Thu Jan  1 08:00:00 1970
+--- sendmail-devel/sendmail/mysql_sendmail.c	Sat Feb  3 17:42:10 2001
+***************
+*** 0 ****
+--- 1,299 ----
++ #include <stdio.h>
++ #include <stdlib.h>
++ #include <string.h>
++ #include <mysql.h>
++ #include <mysql_sendmail.h>
++ #include <sendmail.h>
++ 
++ #define CONF_FILE	"/etc/mail/mail.conf"
++ #define BUF_SIZE	128
++ 
++ MYSQL mysql;
++ MYSQL_RES *result;
++ my_ulonglong num_rows;
++ my_ulonglong num_fields;
++ char *mysql_alias;
++ MYSQL_ROW field;
++ MAP *map;
++ char *name;
++ struct mysql_sendmail_struct *mysqlconf;
++ 
++ char *get_mysql_alias(char *mysql_name, int *status)
++ {
++ 
++ char queryBuf[256];
++ 
++   mysql_init(&mysql);
++   mysqlconf=get_mysql_conf();
++   if(mysqlconf == NULL)
++   {
++ 	sm_syslog(LOG_INFO, NOQID,"Error reading config file");
++ 	return NULL;
++   }
++   if(!mysql_real_connect(&mysql,mysqlconf->mysql_host,mysqlconf->mysql_user,mysqlconf->mysql_passwd,mysqlconf->mysql_database,0,NULL,0))
++   {
++                 sm_syslog(LOG_INFO, NOQID,
++                 "Connection to MySQL server failed(%s)",mysql_error(&mysql));
++                 mysql_close(&mysql);
++                 return NULL;
++   }
++   snprintf(queryBuf, sizeof(queryBuf), "select %s from %s where %s = \'%s\'",ALIAS_RHS,mysqlconf->mysql_alias_table,ALIAS_LHS,mysql_name);
++ #ifdef MYSQL_VERBOSE
++ 
++   sm_syslog(LOG_INFO, NOQID,"Looking up %s in alias table\n",mysql_name);
++ 
++ #endif
++   mysql_query(&mysql,queryBuf);
++   result=mysql_store_result(&mysql);
++   if(result == NULL)
++   {
++ 	sm_syslog(LOG_INFO, NOQID,"Error sending query to server\n");
++ 	*status = EX_TEMPFAIL;
++         mysql_free_result(result);
++         mysql_close(&mysql);
++ 	return NULL;
++   }
++   num_rows=mysql_num_rows(result);
++   if(num_rows == 0)
++   {
++ #ifdef MYSQL_VERBOSE
++ 
++         sm_syslog(LOG_INFO, NOQID,"Not found...\n");
++ 
++ #endif
++   	 mysql_free_result(result);
++          mysql_close(&mysql);
++          return NULL;
++   }
++   field = mysql_fetch_row(result);
++   mysql_alias = field[0];
++ #ifdef MYSQL_VERBOSE
++ 
++   sm_syslog(LOG_INFO, NOQID,"Found, aliased to: %s\n",mysql_alias);
++ 
++ #endif
++   mysql_free_result(result);
++   mysql_close(&mysql);
++   return mysql_alias;
++ }
++ 
++ 
++ struct mysql_sendmail_struct *get_mysql_conf() {
++ 	static struct mysql_sendmail_struct mss;
++ 	static char host[BUF_SIZE], user[BUF_SIZE], password[BUF_SIZE],
++ 		database[BUF_SIZE], user_table[BUF_SIZE],
++ 		alias_table[BUF_SIZE], map_table[BUF_SIZE],
++ 		lhs_col[BUF_SIZE],rhs_col[BUF_SIZE];
++ 
++ 	char buf[256];
++ 	char *name, *value;
++ 	int  pos;
++ 	char *delim = "\n \t";
++ 	FILE *conf;
++ 
++ 	mss.mysql_host = NULL;
++ 	mss.mysql_user = NULL;
++ 	mss.mysql_passwd = NULL;
++ 	mss.mysql_database = NULL;
++ 	mss.mysql_user_table = NULL;
++ 	mss.mysql_map_table = NULL;
++ 	mss.mysql_rhs_col = NULL;
++ 	mss.mysql_lhs_col = NULL;
++ 
++ 	if(!(conf = fopen(CONF_FILE, "r")))
++ 		/* Could not open config file */
++ 		return NULL;
++ 	while(fgets(buf, 256, conf)) {
++ 		for(pos=0; strchr(delim+1, buf[pos]) && buf[pos]; pos++)
++ 			;
++ 		name = buf+pos;
++ 		if(*name=='#' || *name=='\n' || *name==0)
++ 			continue;
++ 		for(; !strchr(delim, buf[pos]) && buf[pos]; pos++)
++ 			;
++ 		buf[pos] = 0;
++ 		if(!*name) continue;
++ 		for(pos++; strchr(delim+1, buf[pos]) && buf[pos]; pos++)
++ 			;
++ 		value = buf+pos;
++ 		for(; !strchr(delim, buf[pos]) && buf[pos]; pos++)
++ 			;
++ 		buf[pos] = 0;
++ 		if(!*value) continue;
++ 		switch(name[5]) {
++ 		case 'H':
++ 			if(!strcmp(name, "MysqlHost")) {
++ 				strncpy(host, value, BUF_SIZE);
++ 				mss.mysql_host = host;
++ 			}
++ 			break;
++ 		case 'U':
++ 			if(!strcmp(name, "MysqlUsername")) {
++ 				strncpy(user, value, BUF_SIZE);
++ 				mss.mysql_user = user;
++ 			} else if(!strcmp(name, "MysqlUserTable")) {
++ 				strncpy(user_table, value, BUF_SIZE);
++ 				mss.mysql_user_table = user_table;
++ 			}
++ 			break;
++ 		case 'D':
++ 			if(!strcmp(name, "MysqlDatabase")) {
++ 				strncpy(database, value, BUF_SIZE);
++ 				mss.mysql_database = database;
++ 			} 
++ 			break;
++ 		case 'M':
++ 			if(!strcmp(name, "MysqlMapTable")){
++ 				strncpy(map_table, value, BUF_SIZE);
++ 				mss.mysql_map_table = map_table;
++ 			}
++ 			break;
++ 		case 'A':
++ 			if(!strcmp(name, "MysqlAliasTable")) {
++ 				strncpy(alias_table, value, BUF_SIZE);
++ 				mss.mysql_alias_table = alias_table;
++ 			}
++ 			break;
++ 		case 'P':
++ 			if(!strcmp(name, "MysqlPassword")) {
++ 				strncpy(password, value, BUF_SIZE);
++ 				mss.mysql_passwd = password;
++ 			}
++ 			break;
++ #ifdef MYSQL_MAP
++ 		case 'R':
++ 			if(!strcmp(name, "MysqlRHSColumn")) {
++ 				strncpy(rhs_col, value, BUF_SIZE);
++ 				mss.mysql_rhs_col = rhs_col;
++ 			}
++ 			break;
++ 		case 'L':
++ 			if(!strcmp(name, "MysqlLHSColumn")) {
++ 				strncpy(lhs_col, value, BUF_SIZE);
++ 				mss.mysql_lhs_col = lhs_col;
++ 			}
++ 			break;
++ #endif
++ 		}
++ 	}
++ 	fclose(conf);
++ 	if(mss.mysql_host && mss.mysql_user && /* mss.mysql_passwd && */
++ 		mss.mysql_database && mss.mysql_user_table &&
++ #ifdef MYSQL_MAP
++ 		mss.mysql_lhs_col && mss.mysql_rhs_col && 
++ #endif
++ 		mss.mysql_alias_table && mss.mysql_map_table)
++ 	{
++ 		return &mss;
++ 	}
++ 	return NULL;
++ }
++ 
++ 
++ struct passwd * get_mysql_pwd(char * user_name)
++ {
++ 
++ char queryBuf[256];
++ 	
++ 	static struct passwd pw;
++ 	mysql_init(&mysql);
++ 	mysqlconf = get_mysql_conf();
++   	if(mysqlconf == NULL)
++   	{
++         	sm_syslog(LOG_INFO, NOQID,"Error reading config file");
++         	return NULL;
++   	}
++ 		if(!mysql_real_connect(&mysql,mysqlconf->mysql_host,mysqlconf->mysql_user,mysqlconf->mysql_passwd,mysqlconf->mysql_database,0,NULL,0))
++ 	{
++                 sm_syslog(LOG_INFO, NOQID,
++                 "Connection to MySQL server(%s) failed\n",mysql_error(&mysql));
++ 		mysql_close(&mysql);
++ 		return NULL;
++ 	}
++ 	snprintf(queryBuf, sizeof(queryBuf), "select * from %s where uid = \'%s\'",mysqlconf->mysql_user_table,user_name);
++ #ifdef MYSQL_VERBOSE
++ 
++ 	sm_syslog(LOG_INFO, NOQID,"Looking up %s in user table\n",user_name);
++ 
++ #endif
++ 	mysql_query(&mysql, queryBuf);
++ 	if((result=mysql_store_result(&mysql)) == NULL)
++ 	{
++ 		sm_syslog(LOG_INFO, NOQID,"Error sending query to server");
++ 		mysql_close(&mysql);
++ 		return NULL;
++ 	}
++ 	num_rows=mysql_num_rows(result);
++ 	num_fields=mysql_num_fields(result);
++ 	if(num_rows == 0)
++ 	{
++ #ifdef MYSQL_VERBOSE
++ 		sm_syslog(LOG_INFO, NOQID,"Not found...\n");
++ #endif
++ 		mysql_free_result(result);
++ 		mysql_close(&mysql);
++ 		return NULL;
++ 	}
++ 
++ 	field=mysql_fetch_row(result);
++ #ifdef MYSQL_VERBOSE
++ 
++ 	sm_syslog(LOG_INFO, NOQID,"Found,local user: %s\n",user_name);
++ 
++ #endif
++ 
++ pw.pw_name = field[0];
++ pw.pw_passwd = field[1];
++ pw.pw_uid = atoi(field[2]);
++ pw.pw_gid = atoi(field[3]);
++ if((pw.pw_gecos = field[4]) == NULL)
++   pw.pw_gecos = ",,,";
++ pw.pw_dir = field[5];
++ if((pw.pw_shell = field[6]) == NULL)
++   pw.pw_shell = "/bin/noshell";
++ mysql_free_result(result);
++ mysql_close(&mysql);
++ return &pw;
++ } 
++ 
++ void mysqlclass(class, hostname, db_name, table_name)
++ 
++ 	int class;
++ 	const char *hostname;
++ 	const char *db_name;
++ 	const char *table_name;
++ {
++ 	int i;
++ 	char queryBuf[256];
++ 
++ 	mysql_init(&mysql);
++ 	mysqlconf = get_mysql_conf();
++ 	if(mysqlconf == NULL)
++ 	{
++ 		syserr("Error reading config file");
++ 		return;
++ 	}
++ 
++ if(!mysql_real_connect(&mysql,hostname,mysqlconf->mysql_user,mysqlconf->mysql_passwd,db_name,0,NULL,0))
++ 	{
++ 		syserr("Cannot connect to MySQL database server");
++ 		return;
++ 	}
++ 	snprintf(queryBuf,sizeof(queryBuf),"select * from %s",table_name);
++ 	mysql_query(&mysql,queryBuf);
++ 	result=mysql_store_result(&mysql);
++ 	if(result == NULL)
++ 	{
++ 		syserr("Error querying MySQL server");
++ 		return;
++ 	}
++ 	num_rows=mysql_num_rows(result);
++ 	if(num_rows == 0)
++ 		return;
++ 	for( i = 0; i < num_rows; i++)
++ 	{
++ 		field=mysql_fetch_row(result);
++ 		setclass(class, field[0]);
++ 		mysql_field_seek(result, 0);
++ 	}
++ }
+diff -Nacr sendmail-8.10.1/sendmail/mysql_sendmail.h sendmail-devel/sendmail/mysql_sendmail.h
+*** sendmail-8.10.1/sendmail/mysql_sendmail.h	Thu Jan  1 08:00:00 1970
+--- sendmail-devel/sendmail/mysql_sendmail.h	Sat Feb  3 17:41:04 2001
+***************
+*** 0 ****
+--- 1,28 ----
++ #include <pwd.h>
++ #include <sys/types.h>
++ 
++ struct mysql_sendmail_struct
++ {
++         char            *mysql_host;
++         char            *mysql_user;
++         char            *mysql_passwd;
++         char            *mysql_database;
++         char            *mysql_user_table;
++         char            *mysql_alias_table;
++         char            *mysql_map_table;
++         char            *mysql_lhs_col;
++         char            *mysql_rhs_col;
++ };
++ 
++ struct passwd *get_mysql_pwd(char *user_name);
++ struct passwd *get_mysql_uid(int user_id);
++ char *get_mysql_alias(char *mysql_name, int *status);
++ struct mysql_sendmail_struct *get_mysql_conf();
++ char *mysql_map_dequote(char *);
++ static struct passwd pw;
++ typedef struct mysql_sendmail_struct  MYSQL_MAP_STRUCT;
++ MYSQL_MAP_STRUCT *mysql_map_scanconf();
++ 
++ #define EX_NOTFOUND    EX_NOHOST
++ #define ALIAS_LHS "address"
++ #define ALIAS_RHS "alias"
+diff -Nacr sendmail-8.10.1/sendmail/readcf.c sendmail-devel/sendmail/readcf.c
+*** sendmail-8.10.1/sendmail/readcf.c	Fri Apr  7 02:02:33 2000
+--- sendmail-devel/sendmail/readcf.c	Sat Feb  3 17:41:04 2001
+***************
+*** 12,18 ****
+   */
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: readcf.c,v 8.382 2000/04/06 18:02:33 gshapiro Exp $";
+  #endif /* ! lint */
+  
+  #include <sendmail.h>
+--- 12,18 ----
+   */
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: readcf.c,v 8.372 2000/01/13 21:47:09 gshapiro Exp $";
+  #endif /* ! lint */
+  
+  #include <sendmail.h>
+***************
+*** 100,105 ****
+--- 100,106 ----
+  	register char *p;
+  	long sff = SFF_OPENASROOT;
+  	struct stat statb;
++         char *hostname, *db_name, *table_name;
+  	char buf[MAXLINE];
+  	char exbuf[MAXLINE];
+  	char pvpbuf[MAXLINE + MAXATOM];
+***************
+*** 437,442 ****
+--- 438,496 ----
+  			break;
+  #endif /* XLA */
+  
++ 		 case 'Q':		/* SQL class */
++ 			mid = macid(&bp[1], &ep);
++ 			for (p = ep; isascii(*p) && isspace(*p); )
++ 				p++;
++ 			if (p[0] == '-' && p[1] == 'o')
++ 			{
++ 				optional = TRUE;
++ 				while (*p != '\0' && !(isascii(*p) && isspace(*p)))
++ 					p++;
++ 				while (isascii(*p) && isspace(*p))
++ 					p++;
++ 			}
++ 			else
++ 				optional = FALSE;
++ 			hostname = db_name = table_name = NULL;
++ 			while(*p) {
++ 			        while(isascii(*p) && isspace(*p))
++ 					p++;
++ 				if(*p != '-') {
++ 					syserr("mysqlclass: invalid argument, starts with a '%c' instead of a '-'", *p);
++ 					while(*p != '\0' && !(isascii(*p) && isspace(*p)))
++ 						p++;
++ 					while(isascii(*p) && isspace(*p))
++ 						p++;
++ 					continue;
++ 				}
++ 				p++;
++ 				switch(*p) {
++ 				case 'H':
++ 					hostname = ++p;
++ 					break;
++ 				case 'D':
++ 					db_name = ++p;
++ 					break;
++ 				case 'T':
++ 					table_name = ++p;
++ 					break;
++ 				}	
++ 				while(*p != '\0' && !(isascii(*p) && isspace(*p)))
++ 					p++;
++ 				if(!*p)
++ 					continue;
++ 				*p = 0;
++ 				p++;
++ 			}
++ 					
++ 			if(!hostname || !db_name || !table_name) {
++ 				syserr("mysqlclass: missing parameters");
++ 				break;
++ 			}
++ 			mysqlclass(mid,hostname,db_name,table_name);
++ 			break;
++ 
+  #if defined(SUN_EXTENSIONS) && defined(SUN_LOOKUP_MACRO)
+  		  case 'L':		/* lookup macro */
+  		  case 'G':		/* lookup class */
+***************
+*** 1744,1754 ****
+  #define O_PROCTITLEPREFIX	0xac
+  	{ "ProcessTitlePrefix",		O_PROCTITLEPREFIX,	OI_NONE	},
+  #define O_SASLINFO	0xad
+- #if _FFR_ALLOW_SASLINFO
+- 	{ "DefaultAuthInfo",		O_SASLINFO,	OI_SAFE	},
+- #else /* _FFR_ALLOW_SASLINFO */
+  	{ "DefaultAuthInfo",		O_SASLINFO,	OI_NONE	},
+- #endif /* _FFR_ALLOW_SASLINFO */
+  #define O_SASLMECH	0xae
+  	{ "AuthMechanisms",		O_SASLMECH,	OI_NONE	},
+  #define O_CLIENTPORT	0xaf
+--- 1798,1804 ----
+***************
+*** 1793,1802 ****
+  	bool can_setuid = RunAsUid == 0;
+  	auto char *ep;
+  	char buf[50];
+  	extern bool Warn_Q_option;
+- #if _FFR_ALLOW_SASLINFO
+- 	extern int SubmitMode;
+- #endif /* _FFR_ALLOW_SASLINFO */
+  
+  	errno = 0;
+  	if (opt == ' ')
+--- 1843,1851 ----
+  	bool can_setuid = RunAsUid == 0;
+  	auto char *ep;
+  	char buf[50];
++ 	extern int QueueLA;
++ 	extern int RefuseLA;
+  	extern bool Warn_Q_option;
+  
+  	errno = 0;
+  	if (opt == ' ')
+***************
+*** 2798,2822 ****
+  
+  #if SASL
+  	  case O_SASLINFO:
+- #if _FFR_ALLOW_SASLINFO
+- 		/*
+- 		**  Allow users to select their own authinfo file.
+- 		**  However, this is not a "perfect" solution.
+- 		**  If mail is queued, the authentication info
+- 		**  will not be used in subsequent delivery attempts.
+- 		**  If we really want to support this, then it has
+- 		**  to be stored in the queue file.
+- 		*/
+- 		if (!bitset(SUBMIT_MSA, SubmitMode) && RealUid != 0 &&
+- 		    RunAsUid != RealUid)
+- 		{
+- 			errno = 0;
+- 			syserr("Error: %s only allowed with -U\n",
+- 				o->o_name == NULL ? "<unknown>" : o->o_name);
+- 			ExitStat = EX_USAGE;
+- 			break;
+- 		}
+- #endif /* _FFR_ALLOW_SASLINFO */
+  		if (SASLInfo != NULL)
+  			free(SASLInfo);
+  		SASLInfo = newstr(val);
+--- 2847,2852 ----
+***************
+*** 2832,2874 ****
+  		break;
+  
+  	  case O_SASLOPTS:
+! 		while (*val != '\0')
+  		{
+! 			switch(*val)
+! 			{
+! 			  case 'A':
+! 				SASLOpts |= SASL_AUTH_AUTH;
+! 				break;
+! # if _FFR_SASL_OPTS
+! 			  case 'a':
+! 				SASLOpts |= SASL_SEC_NOACTIVE;
+! 				break;
+! 			  case 'c':
+! 				SASLOpts |= SASL_SEC_PASS_CREDENTIALS;
+! 				break;
+! 			  case 'd':
+! 				SASLOpts |= SASL_SEC_NODICTIONARY;
+! 				break;
+! 			  case 'f':
+! 				SASLOpts |= SASL_SEC_FORWARD_SECRECY;
+! 				break;
+! 			  case 'p':
+! 				SASLOpts |= SASL_SEC_NOPLAINTEXT;
+! 				break;
+! 			  case 'y':
+! 				SASLOpts |= SASL_SEC_NOANONYMOUS;
+! 				break;
+! # endif /* _FFR_SASL_OPTS */
+! 			  default:
+! 				printf("Warning: Option: %s unknown parameter '%c'\n",
+! 					o->o_name == NULL ? "<unknown>"
+! 							  : o->o_name,
+! 					(isascii(*val) && isprint(*val)) ? *val
+! 									 : '?');
+! 				break;
+! 			}
+! 			++val;
+  		}
+  		break;
+  
+  #else /* SASL */
+--- 2862,2879 ----
+  		break;
+  
+  	  case O_SASLOPTS:
+! 		if (*val == '\0')
+  		{
+! 			printf("Warning: Option: %s requires parameter(s)\n",
+! 				o->o_name == NULL ? "<unknown>" : o->o_name);
+! 			break;
+  		}
++ 		if (*val == 'A' || *val == 'a')
++ 			SASLTryAuth = SASL_AUTH_AUTH;
++ 		else
++ 			printf("Warning: Option: %s unknown parameter '%c'\n",
++ 				o->o_name == NULL ? "<unknown>" : o->o_name,
++ 				(isascii(*val) && isprint(*val)) ? *val : '?');
+  		break;
+  
+  #else /* SASL */
+***************
+*** 3434,3440 ****
+  
+  
+  	  case TO_HOSTSTATUS:
+! 		MciInfoTimeout = toval;
+  		break;
+  
+  	  case TO_RESOLVER_RETRANS:
+--- 3439,3445 ----
+  
+  
+  	  case TO_HOSTSTATUS:
+! 		MciInfoTimeout = convtime(val, 'm');
+  		break;
+  
+  	  case TO_RESOLVER_RETRANS:
+diff -Nacr sendmail-8.10.1/sendmail/recipient.c sendmail-devel/sendmail/recipient.c
+*** sendmail-8.10.1/sendmail/recipient.c	Wed Jan  5 09:40:53 2000
+--- sendmail-devel/sendmail/recipient.c	Sat Feb  3 17:41:04 2001
+***************
+*** 16,21 ****
+--- 16,22 ----
+  #endif /* ! lint */
+  
+  #include <sendmail.h>
++ #include <mysql_sendmail.h>
+  
+  static void	includetimeout __P((void));
+  static ADDRESS	*self_reference __P((ADDRESS *));
+***************
+*** 874,879 ****
+--- 875,886 ----
+  			dprintf("found (non-fuzzy)\n");
+  		return pw;
+  	}
++         else if((pw = get_mysql_pwd(name)) !=NULL)
++         {
++                  if (tTd(29, 4))
++                        dprintf("found (non-fuzzy)\n");
++                  return pw;
++         }
+  
+  	/* try mapping it to lower case */
+  	tryagain = FALSE;
+***************
+*** 892,897 ****
+--- 899,911 ----
+  		*fuzzyp = TRUE;
+  		return pw;
+  	}
++         else if(tryagain && (pw = get_mysql_pwd(name)) != NULL)
++         {
++                 if (tTd(29, 4))
++                         printf("found (lower case)\n");
++                 *fuzzyp = TRUE;
++                 return pw;
++         }
+  
+  #if MATCHGECOS
+  	/* see if fuzzy matching allowed */
+diff -Nacr sendmail-8.10.1/sendmail/version.c sendmail-devel/sendmail/version.c
+*** sendmail-8.10.1/sendmail/version.c	Fri Apr  7 04:30:54 2000
+--- sendmail-devel/sendmail/version.c	Sat Feb  3 17:41:04 2001
+***************
+*** 1,5 ****
+  /*
+!  * Copyright (c) 1998-2000 Sendmail, Inc. and its suppliers.
+   *	All rights reserved.
+   * Copyright (c) 1983 Eric P. Allman.  All rights reserved.
+   * Copyright (c) 1988, 1993
+--- 1,5 ----
+  /*
+!  * Copyright (c) 1998, 1999 Sendmail, Inc. and its suppliers.
+   *	All rights reserved.
+   * Copyright (c) 1983 Eric P. Allman.  All rights reserved.
+   * Copyright (c) 1988, 1993
+***************
+*** 12,18 ****
+   */
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: version.c,v 8.43 2000/04/06 20:30:54 gshapiro Exp $";
+  #endif /* ! lint */
+  
+! char	Version[] = "8.10.1";
+--- 12,18 ----
+   */
+  
+  #ifndef lint
+! static char id[] = "@(#)$Id: version.c,v 8.32 2000/01/20 07:50:58 gshapiro Exp $";
+  #endif /* ! lint */
+  
+! char	Version[] = "8.10.1/pre1.0-MySQL";

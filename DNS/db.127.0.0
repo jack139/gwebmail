@@ -1,0 +1,8 @@
+@    IN SOA gt.gtth.org. root.gtth.org. ( 
+			1 
+			10800 
+			3600 
+			604800 
+			86400 )
+     IN NS  gt.gtth.org.
+1    IN PTR gt.gtth.org.

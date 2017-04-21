@@ -1,0 +1,11 @@
+;BIND DUMP V8
+$ORIGIN net.
+gtth	86400	IN	MX	0 gt.gtth.net.	;Cl=2
+	86400	IN	NS	gt.gtth.net.	;Cl=2
+	86400	IN	SOA	gt.gtth.net. root.gtth.net. (
+		2 10800 3600 604800 86400 )	;Cl=2
+$ORIGIN gtth.net.
+gt	86400	IN	MX	0 gt.gtth.net.	;Cl=2
+	86400	IN	NS	gt.gtth.net.	;Cl=2
+	86400	IN	A	192.168.0.1	;Cl=2
+localhost	86400	IN	A	127.0.0.1	;Cl=2

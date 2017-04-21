@@ -1,0 +1,99 @@
+<html><head>
+<meta http-equiv=Content-Type content="text/html; charset=gb2312">
+<title>outbox</title></head>
+<body bgcolor=#FFFFFF text=#000000>
+<p>&nbsp;</p>
+<form method=POST action=/cgi-bin/modinfo>
+<%$bg$%>
+<input type=hidden name=uid value=<%$uid$%>>
+<input type=hidden name=des value=<%$des$%>>
+<center>
+<table width=90% border=0 cellpadding=0 cellspacing=0>
+<tr> 
+   <td bgcolor=#99c8ff colspan=4 height=25>&nbsp;</td>
+</tr>
+ <tr>
+     <td height=25 bgcolor=#99c8ff>
+         <div align=right><font color=#FFFFFF>信箱地址:&nbsp;&nbsp;</font></div>
+     </td>
+     <td colspan=3 height=25 bgcolor=#99c8ff>
+          <div align=left><font color=#0033cc><b><%$addr$%></b></font></div>
+     </td>
+ </tr>
+ <tr>
+     <td bgcolor=#99c8ff height=25>
+        <div align=right><font color=#FFFFFF>用户名称:&nbsp;&nbsp;</font></div>
+     </td>
+     <td colspan=3 bgcolor=#99c8ff height=25> 
+          <div align=left>
+          <input type=text name=usr_n maxlength=8 size=20 value="<%$name$%>">
+        </div>
+     </td>
+ </tr>
+ <tr> 
+      <td bgcolor=#99c8ff height=25>
+        <div align=right><font color=#FFFFFF>信箱口令:&nbsp;&nbsp;</font></div>
+      </td>
+      <td bgcolor=#99c8ff height=25>
+          <div align=left>
+          <input type=password maxlength=20 name=pwd size=10 value="<%$pwd$%>">
+        </div>
+      </td>
+      <td bgcolor=#99c8ff height=25>
+       <div align=right><font color=#ffffff>口令确认:&nbsp;&nbsp;</font></div>
+      </td>
+      <td bgcolor=#99c8ff height=25>
+          <div align=left>
+          <input type=password maxlength=20 name=confirm_pwd size=10 value="<%$pwd2$%>">
+        </div>
+      </td>
+ </tr>
+ <tr> 
+      <td valign=top bgcolor=#99c8ff>
+        <div align=right><font color=#FFFFFF>联系地址:&nbsp;&nbsp;</font></div>
+      </td>
+      <td colspan=3 bgcolor=#99c8ff>
+          <div align=left>
+          <textarea name=addr cols=30 rows=4><%$addr2$%></textarea>
+         </div>
+      </td>
+ </tr>
+ <tr> 
+   <td height=25 bgcolor=#99c8ff>
+     <div align=right><font color=#FFFFFF>密码提示问题:&nbsp;&nbsp;</font></div>
+   </td>
+      <td height=25 colspan=3 bgcolor=#99c8ff>
+          <div align=left>
+          <input type=text name=ques maxlength=200 size=30 value="<%$ques$%>">
+         </div>
+      </td>
+ </tr>
+ <tr> 
+      <td height=25 bgcolor=#99c8ff>
+        <div align=right><font color=#FFFFFF>问题答案:&nbsp;&nbsp;</font></div>
+      </td>
+      <td colspan=3 height=25 bgcolor=#99c8ff>
+          <div align=left>
+          <input type=text name=ans maxlength=200 size=30 value="<%$ans$%>">
+         </div>
+      </td>
+ </tr>
+<%$ed$%>
+ <tr> 
+     <td bgcolor=#99c8ff colspan=4 height=35> 
+          <div align=right></div>
+        <div align=center><font color=#0033cc> 
+          <input type=submit value=确定 name=submit>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          <input type=reset value=取消 name=cancel>
+          </font></div>
+     </td>
+ </tr>
+<tr> 
+   <td bgcolor=#99c8ff colspan=4 height=25>&nbsp;</td>
+</tr>
+ 
+  </table>
+  </center>
+  </form>
+</body></html>

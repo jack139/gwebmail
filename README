@@ -1,0 +1,176 @@
+本文提供有关gWebmail的相关说明
+by gtth, 最后修改时间: 2001-01-04
+
+gWebmail由gtth开发. 
+可通过信箱 gtth@gtth.org 与我联系.
+有关gWebmail的最新进展可从 http://gtth.org/ 获得.
+
+gWebmail是自由软件, 你可以遵照自由软件基金会发布的GNU通用公共许可证(GPL)条款
+来修改和重新发布这一软件. 发布这一软件的目的是希望它有用, 但没有任何担保.
+甚至没有适合特定目的的隐含的担保. 更详细的情况请参阅GNU通用公共许可证.
+
+gWebmail是免费的, 并提供全部源程序, 你可以根据你的需要进行修改和完善,
+如果有相关技术问题可与gtth联系, 你会得到尽可能的帮助. 如果你对gWebmail
+有较好的修改或完善, 请你与gtth联系, 以使您的成就可以共享.
+
+
+!!!!!!!!!!!!!!!!!!!!! 最新特征 !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1. 支持多域名环境,可同时支撑不同域名用户的使用
+2. 使用MySQL进行用户管理,不使用/etc/passwd文件,所以理论上
+   对最大用户数没有限制
+3. 支持页面模板,使界面和程序分离,可动态修改界面
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+一. 运行环境及需求
+1. 平台: Linux  测试环境版本为 Redhat Linux 6.2 Kernel 2.2.18
+2. 邮件服务器: Sendmail 8.10.1 (此版本的gWebmail仅支持8.10.1)
+3. WWW服务器: Apache  测试环境版本为 1.3.12
+4. 数据库: MySQL  测试环境版本为 3.23.32
+5. POP3服务: in.pop3d的gt修订版 (用户验证使用数据库,而非/etc/shadow)
+6. DNS服务: 测试环境版本为 8.2.2
+
+二. 程序说明
+1. gWebmail分四部分: CGI部分, POP3修订, 后台程序, 及其它文件
+2. 除一部分页面和页面模板用HTML编写外, 其它均用C语言编写
+3. bkrun 是后台进程, 用于删除垃圾签名和检查邮箱尺寸
+4. 文件说明:
+   wm/README                       本文件, 罗列安装说明及其它
+   wm/BUGLIST                      缺陷列表, 罗列现存的缺陷
+   wm/CHANGLOG                     修改日志, 罗列各版本修改内容
+   wm/db.sql                       数据库表结构安装脚本
+   wm/*.html                       HTML文件
+   wm/sendmail-8.10.1.wm.patch     Sendmail+MySQL补丁
+   wm/mail.conf                    Sendmail+MySQL的配置文件(范例) 
+   wm/signature                    邮件签名档
+   wm/cgi/*                        CGI源程序
+   wm/new_pop3d/*                  in.pop3d的gt修订版源程序
+   wm/bkrun/*                      后台进程源程序
+   wm/template/*.html              HTML模板文件
+   wm/images/*                     图片
+   wm/DNS/*                        测试环境的DNS配置文件(范例)
+
+三. 安装说明
+1. 按运行环境要求建立基本环境: Linux , Apache, MySQL, BIND
+2. Sendmail 需加入 Sendmail+MySQL 补丁. 安装包中的补丁只适用于 Sendmail 8.10.1,
+   现在暂时不支持其它版本的 Sendmail. 具体打补丁过程如下.
+   Sendmail 8.10.1 的安装包为 sendmail.8.10.1.tar.gz
+   假设解包在/usr/local/src目录下,具体方法如下(要求以root身份执行):
+      cp -f sendmail.8.10.1.tar.gz /usr/local/src/
+      cp -f sendmail-8.10.1.wm.patch /usr/local/src/
+      cd /usr/local/src
+      tar xvfz sendmail.8.10.1.tar.gz
+      patch -p0 < sendmail-8.10.1.wm.patch
+      cd sendmail-8.10.1
+      ./Build
+   此时开始编译,以后的安装过程与标准安装过程相同,此处不再提及.
+   另外,需用 Sendmail 包里的 mail.local 覆盖系统自带的 mail.local,命令如下:
+   cp /usr/local/src/sendmail-8.10.1/obj.Linux.2.2.x.ix86/mail.local/mail.local\
+      /usr/bin/
+   (一般 mail.local 放在 /usr/bin 目录下)
+
+3. 安装完 Sendmail 后,除了传统的 Sendmail 设置外,还需对 sendmail.cf 文件进行修改
+   以支持 Sendmail+MySQL 和多域名支持.修改如下:
+   a)将本地 mailer 改为 mail.local (缺省为 procmail)
+     打开 sendmail.cf,找到 Mlocal,如下
+     Mlocal,     P=/usr/bin/procmail, ...
+                 ...
+                 A=procmail -Y -a $h -d $u
+     改为
+     Mlocal,     P=/usr/bin/mail.local, ...
+                 ...
+                 A=mail.local -d $u
+   b)找到 Fw/etc/sendmail.cw,在其下以行加入
+     Qw -Hlocalhost -Dwebmail -Tdoamins
+     这样可以动态加入新的域名,而不用每次都修改 sendmail.cw
+   c)加入宏定义 domainalias
+     Kdomainalias mysql -Dwebmail -Mdomainalias -Laddress -Ralias
+   d)修改规则S98,找到S98,将旧的规则注释掉(在行首加#即可).然后加入新的规则.
+     如下:
+     S98
+     R$+ < $+ . >       $1 < $2 >
+     R$+ < $+ >         $: < > $(domainalias $1$2 $)
+     R< > $+ @ $*       $: < $1 > $(domainalias * @ $2 $)
+     R< $+ > * $*       $: < > $1 $2
+     R < $+ > $+        $: < > $2
+     R< > $*            $: $>3 $1
+   e)具体范例可参看本安装包中的sendmail.cf
+
+4. 修改 Sendmail+MySQL 配置文件 wm/mail.conf 并拷到 /etc/mail/ 目录下
+   mail.conf项目说明:
+   MysqlHost       localhost      /*  MySQL 主机地址  */
+   MysqlUsername   root           /*  登录 MySQL 的用户名  */
+   MysqlPassword                  /*  登录口令(此处表示无口令)  */
+   其它项目不要修改
+
+5. 建立数据库和表结构, 表结构说明在 wm/db.sql 文件里, 使用如下命令可进行
+   自动建库, 建表:
+      mysql -u your_db_login_name -p < db.sql
+
+6. 将你的域名加入表domains中,例如我的测试环境中域名为gtth.org和gtth.net,
+   则:
+      insert into domains values ('gtth.org');
+      insert into domains values ('gtth.net');
+   如果你的主机不是多域名,只加入一个域名,也就是你的默认域名就可以了.
+   如果是多域名主机,当然还要修改DNS配置,这里就不详细描述,可参看有关书籍
+   或资料,也可参考本安装包中提供的DNS配置范例(wm/DNS/db.*).另外,因条件
+   所限,我只测试了单机条件下的多域名支持.
+
+7. 修改 wm/cgi/db.h, wm/bkrun/db.h 和 wm/new_pop3d/db.h, 使有关数据库
+   的常量设置正确,一般要修改的db.h中常量设置如下:
+       #define DEF_HOST_NAME "localhost"    /*  MySQL的地址  */
+       #define DEF_USER_NAME "root"         /*  登录名  */
+       #define DEF_PASSWORD ""              /*  登录口令(此处表示无口令)  */
+       #define DEF_DB_NAME "webmail"        /*  登录的数据库  */
+
+8. 修改 wm/cgi/mail_sub.h 和 wm/bkrun/mail_sub.h, 使有关SMTP和POP3的常量设置正确
+    一般要修改的mail_sub.h中常量设置如下:
+       #define POP3_HOST "localhost"        /*  POP3服务的地址  */
+
+9. 修改 wm/cgi/Makefile 里的 CGI-BIN_PATH, 使其指向正确的 cgi-bin 路径
+   修改 wm/cgi/Makefile 里的 HTDOCS_PATH, 使其指向正确的 htdocs 路径
+
+10. 以root身份运行 wm/make
+11. 以root身份运行 wm/make install
+12. 确定 /etc/inet.conf 中 pop3 服务已打开, 且pop3d为 /usr/sbin/in.pop3d
+13. 如果一切顺利, 那就可以从 http://yoursite/ 注册和登录了
+
+四. FAQ
+1. 如果手工安装 in.pop3d,不要忘记创建pop3的临时文件目录.
+   目录路径为: /usr/local/temp/pop, 否则登录会出问题
+2. 如果你的平台还未安装 pop3服务,则要在 /etc/inetd.conf 文件里加入一行如下:
+   pop-3 stream tcp nowait root /usr/sbin/tcpd in.pop3d
+   (参考平台为Red Hat Linux 6.2)
+3. 如果安装完成后,在登录时报告"数据库出错",则要检查 db.h,正确设置与 MySQL
+   有关的常量.注意!!:文件 wm/cgi/db.h,wm/new_pop3d/db.h,wm/bkrun/db.h 中的
+   设置要保证一致.
+4. 如果安装完成后,在登录时报告"邮件服务器出错",则要检查mail_sub.h,正确
+   设置与 pop3 服务有关的常量.注意!!:文件 wm/cgi/mail_sub.h,wm/bkrun/mail_sub.h
+   中的设置要保证一致.
+5. 如果在编译或登录时,提示不能定位与 MySQL 有关的库(一般查看日志文件
+   /var/log/message 可以看到出错信息),可以将这些库文件从MySQL的安装
+   目录拷到/lib中,就可.
+6. 在编译Sendmail时可能会提示无法找到MySQL相关头文件或库文件,建议在编译
+   Sendmail 前把 MySQL 的头文件拷入 /usr/local/include 中,把 MySQL 的库
+   文件拷到 /usr/local/lib 中,这样可以免除编译过程中的一些麻烦.
+7. 如果要对外提供 POP3 服务,登录时要注意.因为 gWebmail 支持多域名,所以
+   POP3的登录名要将域名写上,格式为,用点('.')代替@.例如用户地址为 test@gtth.org,
+   则登录名为 test.gtth.org
+
+五. 其它
+如果有技术问题或发现bug, 请与我联系.由于在下能力有限,所以不免有失误失职之处,
+还请海涵.gWebmail自首次发布至今已得到许多网友的支持和建议,在下在此深表谢意.
+
+另外,因为我很忙,所以gWebmail一直处在发展缓慢的状态中,希望有为之士
+能跳出来一起合作.现在需继续的工作:
+1.文档的完善和维护
+2.程序的全面测试
+3.程序功能的完善
+4.进一步开发的可行性和功能需求
+当然,如果您有更好的项目也可通知我(不限于只作CGI呦).
+
+
+
++++++++++++++++++++++++++++++++++++
+gtth@gtth.org
+http://gtth.org/
+

@@ -1,0 +1,74 @@
+<html>
+<!-- creation date: 2001-1-12 -->
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<title></title>
+</head>
+<body bgcolor=#ffffff text=#0033cc>
+<br>
+<%$bg0$%>
+<p><font color=#0033cc>您的信箱:&nbsp;<b><%$addr$%></b></font></p>
+
+<form method=POST action=<%$fcg_mov$%>>
+<input type=hidden name=uid value=<%$uid$%>>
+<input type=hidden name=des value=<%$des$%>>
+<input type=hidden name=all value=<%$nn$%>>
+<input type=hidden name=src value=<%$box$%>>
+<%$ed0$%>
+<div align=left>
+<%$bg1$%>
+<p><strong><font color=#FF9933><%$box2$%></font></strong>
+<font color=#0033cc>中共有<font color=#ff9933><b>
+<i><%$tot$%></i></b>
+</font>封邮件,其中<font color=#ff9933><b>
+<i><%$tot2$%></i/></b>
+</font>封未读</font></p>
+</div>
+<%$ed1$%>
+<div align=center>
+<center>
+<table border=0 width=100%>
+<tr bgcolor=#99c8ff>
+	<th height=20></th>
+<%$bgg$%>	
+	<th height=20><font color=#ffffff><%$name$%></font></th>
+<%$edd$%>
+	<th height=20><font color=#ffffff>日期</font></th>
+	<th height=20><font color=#ffffff>标题</font></th>
+	<th height=20><font color=#ffffff>大小</font></th>
+</tr>
+<%$bg2$%>
+<tr bgcolor=#dddddd>
+	<td width=12% height=20>
+	<input type=checkbox name=<%$name$%> value=ON>
+	<input type=hidden name=<%$name2$%> value=<%$mid$%>>
+	<%$img$%></td>
+	<td width=28% height=20><font color=#0033cc><%$from$%></font></td>
+	<td width=15% height=20><font color=#000000><%$date$%></font></td>
+	<td width=37% height=20><a href=<%$act$%>><%$title$%></a></td>
+	<td width=8% height=30><div align=right><p><%$sz$%>&nbsp;K&nbsp;</td>
+</tr>
+<%$ed2$%>
+</table>
+<%$tag$%>
+</center></div>
+<p><input type=checkbox name=checkall value=><font color=#0033cc>全部选中</font></p>
+<p><input type=submit value=移动到 name=move>
+&nbsp;&nbsp; <select name=dest  size=1 value=>
+<%$bg3$%>
+<option value=<%$val$%> <%$sel$%>><%$name$%></option>
+<%$ed3$%>
+</select></p>
+</form>
+<%$bg4$%>
+<p><a href=<%$act$%>>清空回收站</a></p>
+<%$ed4$%>
+<br>
+<img src=/images/post.gif>
+</body>
+</html>
+
+<%$other$%>
+</table>
+<p><font color=#6666ff><i>此信箱中无邮件</i></font></p>
+<%$edother$%>

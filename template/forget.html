@@ -1,0 +1,54 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<title>忘记口令</title>
+</head>
+<body bgcolor=#FFFFFF text=#000000>
+<p align=center><big>
+<font color=#FF8040><big>
+<strong>输入密码提示问题的答案</strong>
+</big></font></big></p>
+<form method=POST action=/cgi-bin/doforget>
+<%$bg$%>
+<input type=hidden name=uid value=<%$uid$%>>
+<input type=hidden name=des value=<%$des$%>>
+<div align=center><div align=center>
+<center>
+<table width="70%" border=0 cellpadding=0 cellspacing=0>
+<tr>
+	<td bgcolor=#99c8ff height=25 colspan=2>&nbsp;</td>
+</tr>  
+<tr>
+ <td height=25 bgcolor=#99c8ff>
+   <font color=#FFFFFF><div align=right>
+   密码提示问题:&nbsp;&nbsp;</font>
+ </td>
+ <td height=25 bgcolor=#99c8ff width=352>
+  <font color=#0033cc><b><div align=left>
+  </b></font><font color=#0033cc><b><%$ques$%></b></font>
+ </td>
+</tr>
+<%$ed$%>
+  <tr>
+   <td height=25 bgcolor=#99c8ff>
+	<font color=#FFFFFF><div align=right>请输入答案:&nbsp;&nbsp;</font>
+   </td>
+   <td height=25 bgcolor=#99c8ff width=352>
+	<font color=#0033cc><b><div align=left><p></b></font>
+	<input type=text name=ans maxlength=200 size=30 value>
+	<font color=#0033cc><b></b></font>  
+   </td>  
+</tr>
+<tr>
+   <td bgcolor=#99c8ff height=25 colspan=2>&nbsp;</td>    
+</tr>
+</table>  
+</center></div>
+<div align=center><center>
+<p><input type=submit value=确定 name=submit>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+<input type=reset value=取消 name=cancel> </p>
+</center></div> 
+</div></form>
+<center> <a href=/cgi-bin/login0 target=_top>返回</a></center>
+</body></html>
